@@ -55,7 +55,6 @@ type HLSConfig struct {
 	SubListenAddr       string `json:"sub_listen_addr"`
 	UseMemoryAsDiskFlag bool   `json:"use_memory_as_disk_flag"`
 	hls.MuxerConfig
-	CleanupFlag          bool                   `json:"cleanup_flag"`
 	EventObserverConfig  hls.MuxerEventObserver `json:"-"`
 	HttpReadFileFallback hls.ReadFileFallback   `json:"-"`
 }

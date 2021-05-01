@@ -1,4 +1,6 @@
 {
+  "# doc of config": "https://pengrl.com/lal/#/ConfigBrief",
+  "conf_version": "v0.1.2",
   "rtmp": {
     "enable": true,
     "addr": ":1935",
@@ -19,7 +21,8 @@
     "out_path": "/tmp/lal/hls/",
     "fragment_duration_ms": 3000,
     "fragment_num": 6,
-    "cleanup_flag": true
+    "cleanup_mode": 1,
+    "use_memory_as_disk_flag": false
   },
   "httpts": {
     "enable": true,
@@ -29,9 +32,15 @@
     "enable": true,
     "addr": ":5544"
   },
+  "record": {
+    "enable_flv": false,
+    "flv_out_path": "/tmp/lal/flv/",
+    "enable_mpegts": false,
+    "mpegts_out_path": "/tmp/lal/mpegts"
+  },
   "relay_push": {
     "enable": false,
-    "addr_list":[
+    "addr_list": [
     ]
   },
   "relay_pull": {

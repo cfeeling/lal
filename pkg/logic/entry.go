@@ -9,10 +9,16 @@
 package logic
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"strings"
+
+	"github.com/cfeeling/lal/pkg/hls"
+	"github.com/cfeeling/naza/pkg/nazajson"
 
 	"github.com/cfeeling/lal/pkg/base"
 
@@ -27,57 +33,167 @@ var (
 )
 
 func Entry(confFile string) {
-	configTmp := loadConf(confFile)
+	configTmp := LoadConfAndInitLog(confFile)
+	if dir, err := os.Getwd(); err == nil {
+		nazalog.Infof("wd: %s", dir)
+	}
+	nazalog.Infof("args: %s", strings.Join(os.Args, " "))
+	nazalog.Infof("bininfo: %s", bininfo.StringifySingleLine())
+	nazalog.Infof("version: %s", base.LALFullInfo)
+	nazalog.Infof("github: %s", base.LALGithubSite)
+	nazalog.Infof("doc: %s", base.LALDocSite)
 	RunServer(configTmp)
 }
 
 func RunServer(c *Config) {
 	config = c
-	initLog(c.LogConfig)
-	nazalog.Infof("bininfo: %s", bininfo.StringifySingleLine())
-	nazalog.Infof("version: %s", base.LALFullInfo)
-	nazalog.Infof("github: %s", base.LALGithubSite)
-	nazalog.Infof("doc: %s", base.LALDocSite)
+	if config.HLSConfig.Enable && config.HLSConfig.UseMemoryAsDiskFlag {
+		nazalog.Infof("hls use memory as disk.")
+		hls.SetUseMemoryAsDiskFlag(true)
+	}
+
+	if config.RecordConfig.EnableFLV {
+		if err := os.MkdirAll(config.RecordConfig.FLVOutPath, 0777); err != nil {
+			nazalog.Errorf("record flv mkdir error. path=%s, err=%+v", config.RecordConfig.FLVOutPath, err)
+		}
+		if err := os.MkdirAll(config.RecordConfig.MPEGTSOutPath, 0777); err != nil {
+			nazalog.Errorf("record mpegts mkdir error. path=%s, err=%+v", config.RecordConfig.MPEGTSOutPath, err)
+		}
+	}
 
 	sm = NewServerManager()
 
-	if c.PProfConfig.Enable {
-		go runWebPProf(c.PProfConfig.Addr)
+	if config.PProfConfig.Enable {
+		go runWebPProf(config.PProfConfig.Addr)
 	}
 	go runSignalHandler(func() {
 		sm.Dispose()
 	})
 
-	sm.RunLoop()
+	err := sm.RunLoop()
+	nazalog.Errorf("server manager loop break. err=%+v", err)
 }
 
 func Dispose() {
 	sm.Dispose()
 }
 
-func loadConf(confFile string) *Config {
-	config, err := LoadConf(confFile)
+func LoadConfAndInitLog(confFile string) *Config {
+	// 读取配置文件并解析原始内容
+	rawContent, err := ioutil.ReadFile(confFile)
 	if err != nil {
-		nazalog.Errorf("load conf failed. file=%s err=%+v", confFile, err)
-		os.Exit(1)
+		_, _ = fmt.Fprintf(os.Stderr, "read conf file failed. file=%s err=%+v", confFile, err)
+		base.OSExitAndWaitPressIfWindows(1)
 	}
-	nazalog.Infof("load conf file succ. file=%s content=%+v", confFile, config)
-	return config
-}
+	if err = json.Unmarshal(rawContent, &config); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "unmarshal conf file failed. file=%s err=%+v", confFile, err)
+		base.OSExitAndWaitPressIfWindows(1)
+	}
+	j, err := nazajson.New(rawContent)
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "nazajson unmarshal conf file failed. file=%s err=%+v", confFile, err)
+		base.OSExitAndWaitPressIfWindows(1)
+	}
 
-func initLog(opt nazalog.Option) {
+	// 初始化日志，注意，这一步尽量提前，使得后续的日志内容按我们的日志配置输出
+	// 日志配置项不存在时，设置默认值
+	if !j.Exist("log.level") {
+		config.LogConfig.Level = nazalog.LevelDebug
+	}
+	if !j.Exist("log.filename") {
+		config.LogConfig.Filename = "./logs/lalserver.log"
+	}
+	if !j.Exist("log.is_to_stdout") {
+		config.LogConfig.IsToStdout = true
+	}
+	if !j.Exist("log.is_rotate_daily") {
+		config.LogConfig.IsRotateDaily = true
+	}
+	if !j.Exist("log.short_file_flag") {
+		config.LogConfig.ShortFileFlag = true
+	}
+	if !j.Exist("log.timestamp_flag") {
+		config.LogConfig.TimestampFlag = true
+	}
+	if !j.Exist("log.timestamp_with_ms_flag") {
+		config.LogConfig.TimestampWithMSFlag = true
+	}
+	if !j.Exist("log.level_flag") {
+		config.LogConfig.LevelFlag = true
+	}
+	if !j.Exist("log.assert_behavior") {
+		config.LogConfig.AssertBehavior = nazalog.AssertError
+	}
 	if err := nazalog.Init(func(option *nazalog.Option) {
-		*option = opt
+		*option = config.LogConfig
 	}); err != nil {
 		_, _ = fmt.Fprintf(os.Stderr, "initial log failed. err=%+v\n", err)
-		os.Exit(1)
+		base.OSExitAndWaitPressIfWindows(1)
 	}
 	nazalog.Info("initial log succ.")
+
+	// 打印Logo
+	nazalog.Info(`
+    __    ___    __
+   / /   /   |  / /
+  / /   / /| | / /
+ / /___/ ___ |/ /___
+/_____/_/  |_/_____/
+`)
+
+	// 检查配置版本号是否匹配
+	if config.ConfVersion != ConfVersion {
+		nazalog.Warnf("config version invalid. conf version of lalserver=%s, conf version of config file=%s",
+			ConfVersion, config.ConfVersion)
+	}
+
+	// 检查一级配置项
+	keyFieldList := []string{
+		"rtmp",
+		"httpflv",
+		"hls",
+		"httpts",
+		"rtsp",
+		"record",
+		"relay_push",
+		"relay_pull",
+		"http_api",
+		"http_notify",
+		"pprof",
+		"log",
+	}
+	for _, kf := range keyFieldList {
+		if !j.Exist(kf) {
+			nazalog.Warnf("missing config item %s", kf)
+		}
+	}
+
+	// 配置不存在时，设置默认值
+	if !j.Exist("hls.cleanup_mode") {
+		const defaultMode = hls.CleanupModeInTheEnd
+		nazalog.Warnf("config hls.cleanup_mode not exist. default is %d", defaultMode)
+		config.HLSConfig.CleanupMode = defaultMode
+	}
+
+	// 把配置文件原始内容中的换行去掉，使得打印日志时紧凑一些
+	lines := strings.Split(string(rawContent), "\n")
+	if len(lines) == 1 {
+		lines = strings.Split(string(rawContent), "\r\n")
+	}
+	var tlines []string
+	for _, l := range lines {
+		tlines = append(tlines, strings.TrimSpace(l))
+	}
+	compactRawContent := strings.Join(tlines, " ")
+	nazalog.Infof("load conf file succ. filename=%s, raw content=%s parsed=%+v", confFile, compactRawContent, config)
+
+	return config
 }
 
 func runWebPProf(addr string) {
 	nazalog.Infof("start web pprof listen. addr=%s", addr)
 
+	//nazalog.Warn("start fgprof.")
 	//http.DefaultServeMux.Handle("/debug/fgprof", fgprof.Handler())
 
 	if err := http.ListenAndServe(addr, nil); err != nil {

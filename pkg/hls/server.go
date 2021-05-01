@@ -66,7 +66,7 @@ func (s *Server) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	//nazalog.Debugf("%+v", ri)
 
 	if ri.fileName == "" || ri.streamName == "" || (ri.fileType != "m3u8" && ri.fileType != "ts") {
-		nazalog.Warnf("%+v", ri)
+		nazalog.Warnf("invalid hls request. request=%+v", ri)
 		resp.WriteHeader(404)
 		return
 	}
@@ -76,12 +76,12 @@ func (s *Server) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 		if s.readFileFallback != nil {
 			content, err = s.readFileFallback(s.outPath, ri.fileName, ri.streamName, ri.fileType)
 			if err != nil {
-				nazalog.Warnf("%+v", err)
+				nazalog.Warnf("read hls file failed. request=%+v, err=%+v", ri, err)
 				resp.WriteHeader(404)
 				return
 			}
 		} else {
-			nazalog.Warnf("%+v", err)
+			nazalog.Warnf("read hls file failed. request=%+v, err=%+v", ri, err)
 			resp.WriteHeader(404)
 			return
 		}

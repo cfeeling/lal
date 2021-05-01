@@ -91,7 +91,7 @@ type RTPPacket struct {
 	positionType uint8
 }
 
-func ParseRTPPacket(b []byte) (h RTPHeader, err error) {
+func ParseRTPHeader(b []byte) (h RTPHeader, err error) {
 	if len(b) < RTPFixedHeaderLength {
 		err = ErrRTP
 		return
@@ -111,7 +111,21 @@ func ParseRTPPacket(b []byte) (h RTPHeader, err error) {
 	return
 }
 
+// 函数调用结束后，不持有参数<b>的内存块
+func ParseRTPPacket(b []byte) (pkt RTPPacket, err error) {
+	pkt.Header, err = ParseRTPHeader(b)
+	if err != nil {
+		return
+	}
+	pkt.Raw = make([]byte, len(b))
+	copy(pkt.Raw, b)
+	return
+}
+
 // 比较序号的值，内部处理序号翻转问题，见单元测试中的例子
+// @return  0 a和b相等
+//          1 a大于b
+//         -1 a小于b
 func CompareSeq(a, b uint16) int {
 	if a == b {
 		return 0

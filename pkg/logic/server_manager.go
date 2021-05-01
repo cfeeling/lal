@@ -10,7 +10,6 @@ package logic
 
 import (
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -69,13 +68,12 @@ func NewServerManager() *ServerManager {
 	return m
 }
 
-func (sm *ServerManager) RunLoop() {
+func (sm *ServerManager) RunLoop() error {
 	httpNotify.OnServerStart()
 
 	if sm.rtmpServer != nil {
 		if err := sm.rtmpServer.Listen(); err != nil {
-			nazalog.Error(err)
-			os.Exit(1)
+			return err
 		}
 		go func() {
 			if err := sm.rtmpServer.RunLoop(); err != nil {
@@ -86,8 +84,7 @@ func (sm *ServerManager) RunLoop() {
 
 	if sm.httpflvServer != nil {
 		if err := sm.httpflvServer.Listen(); err != nil {
-			nazalog.Error(err)
-			os.Exit(1)
+			return err
 		}
 		go func() {
 			if err := sm.httpflvServer.RunLoop(); err != nil {
@@ -98,8 +95,7 @@ func (sm *ServerManager) RunLoop() {
 
 	if sm.httptsServer != nil {
 		if err := sm.httptsServer.Listen(); err != nil {
-			nazalog.Error(err)
-			os.Exit(1)
+			return err
 		}
 		go func() {
 			if err := sm.httptsServer.RunLoop(); err != nil {
@@ -110,8 +106,7 @@ func (sm *ServerManager) RunLoop() {
 
 	if sm.hlsServer != nil {
 		if err := sm.hlsServer.Listen(); err != nil {
-			nazalog.Error(err)
-			os.Exit(1)
+			return err
 		}
 		go func() {
 			if err := sm.hlsServer.RunLoop(); err != nil {
@@ -122,8 +117,7 @@ func (sm *ServerManager) RunLoop() {
 
 	if sm.rtspServer != nil {
 		if err := sm.rtspServer.Listen(); err != nil {
-			nazalog.Error(err)
-			os.Exit(1)
+			return err
 		}
 		go func() {
 			if err := sm.rtspServer.RunLoop(); err != nil {
@@ -134,8 +128,7 @@ func (sm *ServerManager) RunLoop() {
 
 	if sm.httpAPIServer != nil {
 		if err := sm.httpAPIServer.Listen(); err != nil {
-			nazalog.Error(err)
-			os.Exit(1)
+			return err
 		}
 		go func() {
 			if err := sm.httpAPIServer.Runloop(); err != nil {
@@ -156,7 +149,7 @@ func (sm *ServerManager) RunLoop() {
 	for {
 		select {
 		case <-sm.exitChan:
-			return
+			return nil
 		case <-t.C:
 			count++
 
@@ -181,6 +174,8 @@ func (sm *ServerManager) RunLoop() {
 			}
 		}
 	}
+
+	// never reach here
 }
 
 func (sm *ServerManager) Dispose() {
@@ -221,8 +216,8 @@ func (sm *ServerManager) OnRTMPConnect(session *rtmp.ServerSession, opa rtmp.Obj
 
 	var info base.RTMPConnectInfo
 	info.ServerID = config.ServerID
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	if app, err := opa.FindString("app"); err == nil {
 		info.App = app
 	}
@@ -251,8 +246,8 @@ func (sm *ServerManager) OnNewRTMPPubSession(session *rtmp.ServerSession) bool {
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnPubStart(info)
@@ -277,8 +272,8 @@ func (sm *ServerManager) OnDelRTMPPubSession(session *rtmp.ServerSession) {
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnPubStop(info)
@@ -298,8 +293,8 @@ func (sm *ServerManager) OnNewRTMPSubSession(session *rtmp.ServerSession) bool {
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnSubStart(info)
@@ -324,8 +319,8 @@ func (sm *ServerManager) OnDelRTMPSubSession(session *rtmp.ServerSession) {
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnSubStop(info)
@@ -345,8 +340,8 @@ func (sm *ServerManager) OnNewHTTPFLVSubSession(session *httpflv.SubSession) boo
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnSubStart(info)
@@ -371,8 +366,8 @@ func (sm *ServerManager) OnDelHTTPFLVSubSession(session *httpflv.SubSession) {
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnSubStop(info)
@@ -392,8 +387,8 @@ func (sm *ServerManager) OnNewHTTPTSSubSession(session *httpts.SubSession) bool 
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnSubStart(info)
@@ -418,8 +413,8 @@ func (sm *ServerManager) OnDelHTTPTSSubSession(session *httpts.SubSession) {
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnSubStop(info)
@@ -449,8 +444,8 @@ func (sm *ServerManager) OnNewRTSPPubSession(session *rtsp.PubSession) bool {
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnPubStart(info)
@@ -477,8 +472,8 @@ func (sm *ServerManager) OnDelRTSPPubSession(session *rtsp.PubSession) {
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnPubStop(info)
@@ -507,8 +502,8 @@ func (sm *ServerManager) OnNewRTSPSubSessionPlay(session *rtsp.SubSession) bool 
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnSubStart(info)
@@ -535,8 +530,8 @@ func (sm *ServerManager) OnDelRTSPSubSession(session *rtsp.SubSession) {
 	info.AppName = session.AppName()
 	info.StreamName = session.StreamName()
 	info.URLParam = session.RawQuery()
-	info.SessionID = session.UniqueKey
-	info.RemoteAddr = session.RemoteAddr()
+	info.SessionID = session.UniqueKey()
+	info.RemoteAddr = session.GetStat().RemoteAddr
 	info.HasInSession = group.HasInSession()
 	info.HasOutSession = group.HasOutSession()
 	httpNotify.OnSubStop(info)

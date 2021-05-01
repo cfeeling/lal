@@ -9,24 +9,22 @@
 package logic
 
 import (
-	"encoding/json"
-	"io/ioutil"
-
 	"github.com/cfeeling/lal/pkg/httpflv"
 
 	"github.com/cfeeling/lal/pkg/hls"
-	"github.com/cfeeling/naza/pkg/nazajson"
 	"github.com/cfeeling/naza/pkg/nazalog"
 )
 
-const ConfigVersion = "0.0.1"
+const ConfVersion = "v0.1.2"
 
 type Config struct {
+	ConfVersion     string          `json:"conf_version"`
 	RTMPConfig      RTMPConfig      `json:"rtmp"`
 	HTTPFLVConfig   HTTPFLVConfig   `json:"httpflv"`
 	HLSConfig       HLSConfig       `json:"hls"`
 	HTTPTSConfig    HTTPTSConfig    `json:"httpts"`
 	RTSPConfig      RTSPConfig      `json:"rtsp"`
+	RecordConfig    RecordConfig    `json:"record"`
 	RelayPushConfig RelayPushConfig `json:"relay_push"`
 	RelayPullConfig RelayPullConfig `json:"relay_pull"`
 
@@ -54,7 +52,8 @@ type HTTPTSConfig struct {
 }
 
 type HLSConfig struct {
-	SubListenAddr string `json:"sub_listen_addr"`
+	SubListenAddr       string `json:"sub_listen_addr"`
+	UseMemoryAsDiskFlag bool   `json:"use_memory_as_disk_flag"`
 	hls.MuxerConfig
 	CleanupFlag          bool                   `json:"cleanup_flag"`
 	EventObserverConfig  hls.MuxerEventObserver `json:"-"`
@@ -64,6 +63,13 @@ type HLSConfig struct {
 type RTSPConfig struct {
 	Enable bool   `json:"enable"`
 	Addr   string `json:"addr"`
+}
+
+type RecordConfig struct {
+	EnableFLV     bool   `json:"enable_flv"`
+	FLVOutPath    string `json:"flv_out_path"`
+	EnableMPEGTS  bool   `json:"enable_mpegts"`
+	MPEGTSOutPath string `json:"mpegts_out_path"`
 }
 
 type RelayPushConfig struct {
@@ -96,62 +102,4 @@ type HTTPNotifyConfig struct {
 type PProfConfig struct {
 	Enable bool   `json:"enable"`
 	Addr   string `json:"addr"`
-}
-
-func LoadConf(confFile string) (*Config, error) {
-	var config Config
-	rawContent, err := ioutil.ReadFile(confFile)
-	if err != nil {
-		return nil, err
-	}
-	if err = json.Unmarshal(rawContent, &config); err != nil {
-		return nil, err
-	}
-
-	j, err := nazajson.New(rawContent)
-	if err != nil {
-		return nil, err
-	}
-
-	// 检查一级配置项
-	keyFieldList := []string{
-		"rtmp",
-		"httpflv",
-		"hls",
-		"httpts",
-		"rtsp",
-		"relay_push",
-		"relay_pull",
-		"http_api",
-		"http_notify",
-		"pprof",
-		"log",
-	}
-	for _, kf := range keyFieldList {
-		if !j.Exist(kf) {
-			nazalog.Warnf("missing config item %s", kf)
-		}
-	}
-
-	// 配置不存在时，设置默认值
-	if !j.Exist("log.level") {
-		config.LogConfig.Level = nazalog.LevelDebug
-	}
-	if !j.Exist("log.filename") {
-		config.LogConfig.Filename = "./logs/lalserver.log"
-	}
-	if !j.Exist("log.is_to_stdout") {
-		config.LogConfig.IsToStdout = true
-	}
-	if !j.Exist("log.is_rotate_daily") {
-		config.LogConfig.IsRotateDaily = true
-	}
-	if !j.Exist("log.short_file_flag") {
-		config.LogConfig.ShortFileFlag = true
-	}
-	if !j.Exist("log.assert_behavior") {
-		config.LogConfig.AssertBehavior = nazalog.AssertError
-	}
-
-	return &config, nil
 }

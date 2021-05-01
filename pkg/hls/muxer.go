@@ -11,8 +11,6 @@ package hls
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"time"
 
 	"github.com/cfeeling/lal/pkg/mpegts"
@@ -26,8 +24,8 @@ import (
 //            后续从架构上考虑，packet hls,mpegts,logic的分工
 
 type MuxerObserver interface {
-	// rawFrame TS流，回调结束后，内部不再使用该内存块
-	// boundary 新的TS流接收者，应该从该标志为true时开始发送数据
+	// @param rawFrame TS流，回调结束后，内部不再使用该内存块
+	// @param boundary 新的TS流接收者，应该从该标志为true时开始发送数据
 	//
 	OnTSPackets(rawFrame []byte, boundary bool)
 }
@@ -47,11 +45,26 @@ type MuxerEventObserver interface {
 }
 
 type MuxerConfig struct {
-	Enable             bool   `json:"enable"`   // 如果false，说明hls功能没开，也即不写磁盘，但是MuxerObserver依然会回调
-	OutPath            string `json:"out_path"` // m3u8和ts文件的输出根目录，注意，末尾需已'/'结束
+	Enable             bool   `json:"enable"`   // 如果false，说明hls功能没开，也即不写文件，但是MuxerObserver依然会回调
+	OutPath            string `json:"out_path"` // m3u8和ts文件的输出根目录，注意，末尾需以'/'结束
 	FragmentDurationMS int    `json:"fragment_duration_ms"`
 	FragmentNum        int    `json:"fragment_num"`
+
+	// hls文件清理模式：
+	// 0 不删除m3u8+ts文件，可用于录制等场景
+	// 1 在输入流结束后删除m3u8+ts文件
+	//   注意，确切的删除时间是推流结束后的<fragment_duration_ms> * <fragment_num> * 2的时间点
+	//   推迟一小段时间删除，是为了避免输入流刚结束，hls的拉流端还没有拉取完
+	// 2 推流过程中，持续删除过期的ts文件，只保留最近的<fragment_num> * 2个左右的ts文件
+	// TODO chef: lalserver的模式1的逻辑是在上层做的，应该重构到hls模块中
+	CleanupMode int `json:"cleanup_mode"`
 }
+
+const (
+	CleanupModeNever    = 0
+	CleanupModeInTheEnd = 1
+	CleanupModeASAP     = 2
+)
 
 type Muxer struct {
 	UniqueKey string
@@ -73,9 +86,9 @@ type Muxer struct {
 	audioCC  uint8
 
 	fragTS                uint64         // 新建立fragment时的时间戳，毫秒 * 90
-	nfrags                int            // 大序号，增长到winfrags后，就增长frag
+	nfrags                int            // 大序号，增长到config.FragmentNum后，就增长frag
 	frag                  int            // 写入m3u8的EXT-X-MEDIA-SEQUENCE字段
-	frags                 []fragmentInfo // TS文件的环形队列，记录TS的信息，比如写M3U8文件时要用 2 * winfrags + 1
+	frags                 []fragmentInfo // TS文件的固定大小环形队列，记录TS的信息
 	recordMaxFragDuration float64
 
 	streamer *Streamer
@@ -89,16 +102,16 @@ type fragmentInfo struct {
 	filename string
 }
 
-// observer 可以为nil，如果不为nil，TS流将回调给上层
+// @param observer 可以为nil，如果不为nil，TS流将回调给上层
 // eventObserver 可以为nil，主要用于触发新增 frag 和关闭 frag 事件给外部
 func NewMuxer(streamName string, config *MuxerConfig, observer MuxerObserver, eventObserver MuxerEventObserver) *Muxer {
-	uk := base.GenUniqueKey(base.UKPHLSMuxer)
+	uk := base.GenUKHLSMuxer()
 	op := getMuxerOutPath(config.OutPath, streamName)
 	playlistFilename := getM3U8Filename(op, streamName)
-	playlistFilenameBak := fmt.Sprintf("%s.bak", playlistFilename)
 	recordPlaylistFilename := getRecordM3U8Filename(op, streamName)
+	playlistFilenameBak := fmt.Sprintf("%s.bak", playlistFilename)
 	recordPlaylistFilenameBak := fmt.Sprintf("%s.bak", recordPlaylistFilename)
-	frags := make([]fragmentInfo, 2*config.FragmentNum+1) // TODO chef: 为什么是 * 2 + 1
+	frags := make([]fragmentInfo, 2*config.FragmentNum+1)
 	m := &Muxer{
 		UniqueKey:                 uk,
 		streamName:                streamName,
@@ -131,7 +144,7 @@ func (m *Muxer) Dispose() {
 	}
 }
 
-// msg 函数调用结束后，内部不持有msg中的内存块
+// @param msg 函数调用结束后，内部不持有msg中的内存块
 //
 func (m *Muxer) FeedRTMPMessage(msg base.RTMPMsg) {
 	m.streamer.FeedRTMPMessage(msg)
@@ -198,7 +211,7 @@ func (m *Muxer) OutPath() string {
 
 // 决定是否开启新的TS切片文件（注意，可能已经有TS切片，也可能没有，这是第一个切片）
 //
-// boundary 调用方认为可能是开启新TS切片的时间点
+// @param boundary 调用方认为可能是开启新TS切片的时间点
 //
 func (m *Muxer) updateFragment(ts uint64, boundary bool) error {
 	discont := true
@@ -311,11 +324,29 @@ func (m *Muxer) closeFragment(isLast bool) error {
 	}
 
 	m.opened = false
-	//更新序号，为下个分片准备好
+
+	// 更新序号，为下个分片做准备
+	// 注意，后面getFrag和getCurrFrag的调用，都依赖该处
 	m.incrFrag()
 
 	m.writePlaylist(isLast)
-	m.writeRecordPlaylist(isLast)
+
+	if m.config.CleanupMode == CleanupModeNever || m.config.CleanupMode == CleanupModeInTheEnd {
+		m.writeRecordPlaylist(isLast)
+	}
+
+	if m.config.CleanupMode == CleanupModeASAP {
+		// 删除过期文件
+		// 注意，此处获取的是环形队列该位置的上一轮残留下的信息
+		//
+		frag := m.getCurrFrag()
+		if frag.filename != "" {
+			filenameWithPath := getTSFilenameWithPath(m.outPath, frag.filename)
+			if err := fslCtx.Remove(filenameWithPath); err != nil {
+				nazalog.Warnf("[%s] remove stale fragment file failed. filename=%s, err=%+v", m.UniqueKey, filenameWithPath, err)
+			}
+		}
+	}
 
 	return nil
 }
@@ -325,6 +356,8 @@ func (m *Muxer) writeRecordPlaylist(isLast bool) {
 		return
 	}
 
+	// 找出整个直播流从开始到结束最大的分片时长
+	// 注意，由于前面已经incr过了，所以这里-1获取
 	//frag := m.getCurrFrag()
 	currFrag := m.getFrag(m.nfrags - 1)
 	if currFrag.duration > m.recordMaxFragDuration {
@@ -333,7 +366,7 @@ func (m *Muxer) writeRecordPlaylist(isLast bool) {
 
 	fragLines := fmt.Sprintf("#EXTINF:%.3f,\n%s\n", currFrag.duration, currFrag.filename)
 
-	content, err := ioutil.ReadFile(m.recordPlayListFilename)
+	content, err := fslCtx.ReadFile(m.recordPlayListFilename)
 	if err == nil {
 		// m3u8文件已经存在
 
@@ -418,9 +451,9 @@ func (m *Muxer) ensureDir() {
 	if !m.config.Enable {
 		return
 	}
-	//err := os.RemoveAll(m.outPath)
+	//err := fslCtx.RemoveAll(m.outPath)
 	//nazalog.Assert(nil, err)
-	err := os.MkdirAll(m.outPath, 0777)
+	err := fslCtx.MkdirAll(m.outPath, 0777)
 	nazalog.Assert(nil, err)
 }
 

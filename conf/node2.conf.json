@@ -1,4 +1,6 @@
 {
+  "# doc of config": "https://pengrl.com/lal/#/ConfigBrief",
+  "conf_version": "v0.1.2",
   "rtmp": {
     "enable": true,
     "addr": ":1955",
@@ -9,7 +11,6 @@
     "sub_listen_addr": ":8280",
     "enable_https": false,
     "gop_num": 2
-
   },
   "hls": {
     "enable": false
@@ -19,6 +20,10 @@
   },
   "rtsp": {
     "enable": false
+  },
+  "record": {
+    "enable_flv": false,
+    "enable_mpegts": false
   },
   "relay_push": {
     "enable": false

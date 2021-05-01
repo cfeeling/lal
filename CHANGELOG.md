@@ -1,3 +1,31 @@
+#### v0.21.0 (2021-04-11)
+
+- [feat] package rtmp: 支持Aggregate Message
+- [feat] lalserver: 新增配置项hls.cleanup_mode，支持三种清理hls文件的模式，具体说明见 https://pengrl.com/lal/#/ConfigBrief
+- [feat] package rtsp: 支持aac fragment格式（一个音频帧被拆分成多个rtp包），之前这种aac格式可能导致崩溃
+- [doc] 新增文章《rtmp中的各种ID》，见 https://pengrl.com/lal/#/RTMPID
+- [doc] 新增文章《rtmp handshake握手之简单模式和复杂模式》，见 https://pengrl.com/lal/#/RTMPHandshake
+- [fix] rtsp推流时，rtp包时间戳翻转导致的错误（比如长时间推流后hls一直强制切片）
+- [fix] lalserver的group中，rtsp sub超时时，锁重入导致服务器异常阻塞不响应
+- [fix] 修复mipsle架构下rtsp崩溃
+- [fix] 修复lalserver中（rtsp.BaseInSession以及logic.Group）的一些竞态读写，https://github.com/cfeeling/lal/issues/47
+- [fix] demo: 两个拉httpflv流的demo，main函数退出前忘记等待拉流结束
+- [refactor] package rtprtcp: 重构一些函数名
+- [refactor] package rtprtcp: 重构rtp unpacker，业务方可以使用默认的container，protocol策略，也可以自己实现特定的协议解析组包策略
+- [refactor] lalserver: 整理配置文件加载与日志初始化部分的代码
+- [doc] 启用英文版本README.md作为github首页文档展示
+- [doc] lalserver: 新增配置项conf_version，用于表示配置文件的版本号
+- [doc] lalserver: 启动时日志中增加lal logo
+
+#### v0.20.0 (2021-03-21)
+
+- [feat] 新增app/demo/calcrtmpdelay，可用于测量rtmp服务器的转发延时，拉流支持rtmp/httpflv
+- [feat] app/demo/pushrtmp 做压测时，修改为完全并行的模式
+- [fix] 修复32位arm环境使用rtsp崩溃
+- [refactor] 统一各Session接口
+- [refactor] 使用新的unique id生成器，提高性能
+- [doc] 新增文档 ffplay播放rtsp花屏 https://pengrl.com/lal/#/RTSPFFPlayBlur
+
 #### v0.19.1 (2021-02-01)
 
 - [fix] 获取group中播放者数量时锁没有释放，导致后续无法转发数据

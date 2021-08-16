@@ -64,6 +64,7 @@ const (
 	CleanupModeNever    = 0
 	CleanupModeInTheEnd = 1
 	CleanupModeASAP     = 2
+	CleanupOnlyIndex    = 3
 )
 
 type Muxer struct {
@@ -334,6 +335,9 @@ func (m *Muxer) closeFragment(isLast bool) error {
 	if m.config.CleanupMode == CleanupModeNever || m.config.CleanupMode == CleanupModeInTheEnd {
 		m.writeRecordPlaylist(isLast)
 	}
+	if m.config.CleanupMode == CleanupOnlyIndex {
+		m.writeEmptyPlaylist()
+	}
 
 	if m.config.CleanupMode == CleanupModeASAP {
 		// 删除过期文件
@@ -349,6 +353,24 @@ func (m *Muxer) closeFragment(isLast bool) error {
 	}
 
 	return nil
+}
+
+func (m *Muxer) writeEmptyPlaylist() {
+	if !m.config.Enable {
+		return
+	}
+	var buf bytes.Buffer
+	buf.WriteString("#EXTM3U\n")
+	buf.WriteString("#EXT-X-VERSION:3\n")
+	buf.WriteString(fmt.Sprintf("#EXT-X-TARGETDURATION:%d\n", int(m.recordMaxFragDuration)))
+	buf.WriteString(fmt.Sprintf("#EXT-X-MEDIA-SEQUENCE:%d\n\n", 0))
+
+	var content = buf.Bytes()
+	if err := writeM3U8File(content, m.recordPlayListFilename, m.recordPlayListFilenameBak); err != nil {
+		nazalog.Errorf("[%s] write record m3u8 file error. err=%+v", m.UniqueKey, err)
+	} else {
+		nazalog.Errorf("[%s] 清空视频索引文件", m.UniqueKey)
+	}
 }
 
 func (m *Muxer) writeRecordPlaylist(isLast bool) {

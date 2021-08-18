@@ -335,7 +335,7 @@ func (m *Muxer) closeFragment(isLast bool) error {
 	if m.config.CleanupMode == CleanupModeNever || m.config.CleanupMode == CleanupModeInTheEnd {
 		m.writeRecordPlaylist(isLast)
 	}
-	if m.config.CleanupMode == CleanupOnlyIndex {
+	if m.config.CleanupMode == CleanupOnlyIndex && isLast {
 		m.writeEmptyPlaylist()
 	}
 
@@ -369,7 +369,7 @@ func (m *Muxer) writeEmptyPlaylist() {
 	if err := writeM3U8File(content, m.recordPlayListFilename, m.recordPlayListFilenameBak); err != nil {
 		nazalog.Errorf("[%s] write record m3u8 file error. err=%+v", m.UniqueKey, err)
 	} else {
-		nazalog.Errorf("[%s] 清空视频索引文件", m.UniqueKey)
+		nazalog.Info("[%s] 清空视频索引文件", m.UniqueKey)
 	}
 }
 

@@ -330,7 +330,9 @@ func (m *Muxer) closeFragment(isLast bool) error {
 	// 注意，后面getFrag和getCurrFrag的调用，都依赖该处
 	m.incrFrag()
 
-	m.writePlaylist(isLast)
+	if m.config.CleanupMode != CleanupOnlyIndex || !isLast {
+		m.writePlaylist(isLast)
+	}
 
 	if m.config.CleanupMode == CleanupModeNever || m.config.CleanupMode == CleanupModeInTheEnd {
 		m.writeRecordPlaylist(isLast)

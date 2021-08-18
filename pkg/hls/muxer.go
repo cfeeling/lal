@@ -368,10 +368,10 @@ func (m *Muxer) writeEmptyPlaylist() {
 	buf.WriteString(fmt.Sprintf("#EXT-X-MEDIA-SEQUENCE:%d\n\n", 0))
 
 	var content = buf.Bytes()
-	if err := writeM3U8File(content, m.recordPlayListFilename, m.recordPlayListFilenameBak); err != nil {
+	if err := writeM3U8File(content, m.playlistFilename, m.playlistFilenameBak); err != nil {
 		nazalog.Errorf("[%s] write record m3u8 file error. err=%+v", m.UniqueKey, err)
 	} else {
-		nazalog.Info("[%s] 清空视频索引文件", m.UniqueKey)
+		nazalog.Infof("[%s] 清空视频索引文件", m.UniqueKey)
 	}
 }
 

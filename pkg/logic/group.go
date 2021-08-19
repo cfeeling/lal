@@ -1196,6 +1196,9 @@ func (group *Group) broadcastByRtmpMsg(msg base.RtmpMsg) {
 // rtsp.PubSession, rtmp2RtspRemuxer
 //
 func (group *Group) onRtpPacket(pkt rtprtcp.RtpPacket) {
+	if group.sdpCtx == nil {
+		return
+	}
 	// 音频直接发送
 	if group.sdpCtx.IsAudioPayloadTypeOrigin(int(pkt.Header.PacketType)) {
 		for s := range group.rtspSubSessionSet {

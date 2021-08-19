@@ -42,7 +42,7 @@ func main() {
 	}
 	streamName := ctx.LastItemOfPath
 
-	hlsMuexer := hls.NewMuxer(streamName, true, &hlsMuxerConfig, nil)
+	hlsMuexer := hls.NewMuxer(streamName, true, &hlsMuxerConfig, nil, nil)
 	hlsMuexer.Start()
 
 	pullSession := rtmp.NewPullSession(func(option *rtmp.PullSessionOption) {

@@ -777,7 +777,7 @@ func (group *Group) addIn() {
 			nazalog.Errorf("[%s] hls muxer exist while addIn. muxer=%+v", group.UniqueKey, group.hlsMuxer)
 		}
 		enable := config.HlsConfig.Enable || config.HlsConfig.EnableHttps
-		group.hlsMuxer = hls.NewMuxer(group.streamName, enable, &config.HlsConfig.MuxerConfig, group)
+		group.hlsMuxer = hls.NewMuxer(group.streamName, enable, &config.HlsConfig.MuxerConfig, group, config.HlsConfig.EventObserverConfig)
 		group.hlsMuxer.Start()
 	}
 

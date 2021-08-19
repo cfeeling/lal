@@ -32,6 +32,19 @@ type MuxerObserver interface {
 	OnTsPackets(rawFrame []byte, boundary bool)
 }
 
+type MuxerEventObserver interface {
+	// OnOpenFragment
+	// @param ts 新建立fragment时的时间戳，毫秒 * 90
+	// @param id fragment的自增序号
+	// @param discont 不连续标志，会在m3u8文件的fragment前增加`#EXT-X-DISCONTINUITY`
+	// @pram fileName fragment 文件名
+	OnOpenFragment(m *Muxer, rightNow time.Time, ts uint64, id int, discont bool, fileName string)
+	// OnCloseFragment
+	// @param id fragment的自增序号
+	// @param duration 当前fragment中数据的时长，单位秒
+	OnCloseFragment(m *Muxer, id int, duration float64, isLast bool)
+}
+
 type CustomCleanUpCallback func(m *Muxer, isLast bool)
 
 type MuxerConfig struct {
@@ -48,7 +61,7 @@ type MuxerConfig struct {
 	// TODO chef: lalserver的模式1的逻辑是在上层做的，应该重构到hls模块中
 	CleanupMode int `json:"cleanup_mode"`
 
-	cleanupCustomCallback CustomCleanUpCallback
+	CleanupCustomCallback CustomCleanUpCallback `json:"-"`
 }
 
 const (
@@ -70,9 +83,10 @@ type Muxer struct {
 	recordPlayListFilename    string // const after init
 	recordPlayListFilenameBak string // const after init
 
-	config   *MuxerConfig
-	enable   bool
-	observer MuxerObserver
+	config        *MuxerConfig
+	enable        bool
+	observer      MuxerObserver
+	eventCallback MuxerEventObserver
 
 	fragment Fragment
 	opened   bool
@@ -97,9 +111,11 @@ type fragmentInfo struct {
 	filename string
 }
 
+// NewMuxer
 // @param enable   如果false，说明hls功能没开，也即不写文件，但是MuxerObserver依然会回调
 // @param observer 可以为nil，如果不为nil，TS流将回调给上层
-func NewMuxer(streamName string, enable bool, config *MuxerConfig, observer MuxerObserver) *Muxer {
+// @param eventObserver 可以为nil，主要用于触发新增 frag 和关闭 frag 事件给外部
+func NewMuxer(streamName string, enable bool, config *MuxerConfig, observer MuxerObserver, eventObserver MuxerEventObserver) *Muxer {
 	uk := base.GenUkHlsMuxer()
 	op := PathStrategy.GetMuxerOutPath(config.OutPath, streamName)
 	playlistFilename := PathStrategy.GetLiveM3u8FileName(op, streamName)
@@ -119,6 +135,7 @@ func NewMuxer(streamName string, enable bool, config *MuxerConfig, observer Muxe
 		config:                    config,
 		observer:                  observer,
 		frags:                     frags,
+		eventCallback:             eventObserver,
 	}
 	streamer := NewStreamer(m)
 	m.streamer = streamer
@@ -290,7 +307,8 @@ func (m *Muxer) openFragment(ts uint64, discont bool) error {
 
 	id := m.getFragmentId()
 
-	filename := PathStrategy.GetTsFileName(m.streamName, id, int(time.Now().UnixNano()/1e6))
+	rightNow := time.Now()
+	filename := PathStrategy.GetTsFileName(m.streamName, id, int(rightNow.UnixNano()/1e6))
 	filenameWithPath := PathStrategy.GetTsFileNameWithPath(m.outPath, filename)
 	if m.enable {
 		if err := m.fragment.OpenFile(filenameWithPath); err != nil {
@@ -312,6 +330,10 @@ func (m *Muxer) openFragment(ts uint64, discont bool) error {
 
 	// nrm said: start fragment with audio to make iPhone happy
 	m.streamer.FlushAudio()
+
+	if m.eventCallback != nil {
+		m.eventCallback.OnOpenFragment(m, rightNow, ts, id, discont, filename)
+	}
 
 	return nil
 }
@@ -340,21 +362,25 @@ func (m *Muxer) closeFragment(isLast bool) error {
 		m.writeRecordPlaylist(isLast)
 	}
 
-	if m.enable && m.config.CleanupMode == CleanupCustomHandler && m.config.cleanupCustomCallback != nil {
-		m.config.cleanupCustomCallback(m, isLast)
+	if m.enable && m.config.CleanupMode == CleanupCustomHandler && m.config.CleanupCustomCallback != nil {
+		m.config.CleanupCustomCallback(m, isLast)
 	}
 
+	frag := m.getCurrFrag()
 	if m.config.CleanupMode == CleanupModeAsap {
 		// 删除过期文件
 		// 注意，此处获取的是环形队列该位置的上一轮残留下的信息
 		//
-		frag := m.getCurrFrag()
 		if frag.filename != "" {
 			filenameWithPath := PathStrategy.GetTsFileNameWithPath(m.outPath, frag.filename)
 			if err := fslCtx.Remove(filenameWithPath); err != nil {
 				nazalog.Warnf("[%s] remove stale fragment file failed. filename=%s, err=%+v", m.UniqueKey, filenameWithPath, err)
 			}
 		}
+	}
+
+	if m.eventCallback != nil {
+		m.eventCallback.OnCloseFragment(m, frag.id, frag.duration, isLast)
 	}
 
 	return nil

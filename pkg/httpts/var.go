@@ -8,6 +8,7 @@
 
 package httpts
 
-var readBufSize = 256 //16384 // SubSession读取数据时
-var wChanSize = 1024  // SubSession发送数据时channel的大小
-var subSessionWriteTimeoutMS = 10000
+var (
+	SubSessionWriteChanSize  = 1024
+	SubSessionWriteTimeoutMs = 10000
+)

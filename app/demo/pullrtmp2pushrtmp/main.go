@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cfeeling/naza/pkg/nazalog"
+	"github.com/q191201771/naza/pkg/nazalog"
 )
 
 func main() {

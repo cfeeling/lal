@@ -14,7 +14,7 @@ import (
 	"testing"
 
 	. "github.com/cfeeling/lal/pkg/rtmp"
-	"github.com/cfeeling/naza/pkg/assert"
+	"github.com/q191201771/naza/pkg/assert"
 )
 
 func TestHandshakeServerCase(t *testing.T) {

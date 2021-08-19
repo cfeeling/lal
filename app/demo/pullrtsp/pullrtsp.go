@@ -17,44 +17,9 @@ import (
 	"github.com/cfeeling/lal/pkg/base"
 	"github.com/cfeeling/lal/pkg/httpflv"
 	"github.com/cfeeling/lal/pkg/remux"
-	"github.com/cfeeling/lal/pkg/rtprtcp"
 	"github.com/cfeeling/lal/pkg/rtsp"
-	"github.com/cfeeling/naza/pkg/nazalog"
+	"github.com/q191201771/naza/pkg/nazalog"
 )
-
-var fileWriter httpflv.FLVFileWriter
-
-type Observer struct {
-}
-
-func (o *Observer) OnRTPPacket(pkt rtprtcp.RTPPacket) {
-	// noop
-}
-
-func (o *Observer) OnAVConfig(asc, vps, sps, pps []byte) {
-	metadata, ash, vsh, err := remux.AVConfig2FLVTag(asc, vps, sps, pps)
-	nazalog.Assert(nil, err)
-
-	err = fileWriter.WriteTag(*metadata)
-	nazalog.Assert(nil, err)
-
-	if ash != nil {
-		err = fileWriter.WriteTag(*ash)
-		nazalog.Assert(nil, err)
-	}
-
-	if vsh != nil {
-		err = fileWriter.WriteTag(*vsh)
-		nazalog.Assert(nil, err)
-	}
-}
-
-func (o *Observer) OnAVPacket(pkt base.AVPacket) {
-	tag, err := remux.AVPacket2FLVTag(pkt)
-	nazalog.Assert(nil, err)
-	err = fileWriter.WriteTag(tag)
-	nazalog.Assert(nil, err)
-}
 
 func main() {
 	_ = nazalog.Init(func(option *nazalog.Option) {
@@ -62,23 +27,26 @@ func main() {
 	})
 	defer nazalog.Sync()
 
-	inURL, outFilename, overTCP := parseFlag()
+	inUrl, outFilename, overTcp := parseFlag()
 
+	var fileWriter httpflv.FlvFileWriter
 	err := fileWriter.Open(outFilename)
 	nazalog.Assert(nil, err)
 	defer fileWriter.Dispose()
-	err = fileWriter.WriteRaw(httpflv.FLVHeader)
+	err = fileWriter.WriteRaw(httpflv.FlvHeader)
 	nazalog.Assert(nil, err)
 
-	o := &Observer{}
-	pullSession := rtsp.NewPullSession(o, func(option *rtsp.PullSessionOption) {
-		option.PullTimeoutMS = 5000
-		option.OverTCP = overTCP != 0
+	remuxer := remux.NewAvPacket2RtmpRemuxer(func(msg base.RtmpMsg) {
+		err = fileWriter.WriteTag(*remux.RtmpMsg2FlvTag(msg))
+		nazalog.Assert(nil, err)
+	})
+	pullSession := rtsp.NewPullSession(remuxer, func(option *rtsp.PullSessionOption) {
+		option.PullTimeoutMs = 5000
+		option.OverTcp = overTcp != 0
 	})
 
-	err = pullSession.Pull(inURL)
+	err = pullSession.Pull(inUrl)
 	nazalog.Assert(nil, err)
-	defer pullSession.Dispose()
 
 	go func() {
 		for {
@@ -88,11 +56,18 @@ func main() {
 		}
 	}()
 
+	// 临时测试一下主动关闭client session
+	//go func() {
+	//	time.Sleep(5 * time.Second)
+	//	err := pullSession.Dispose()
+	//	nazalog.Debugf("< session Dispose. err=%+v", err)
+	//}()
+
 	err = <-pullSession.WaitChan()
 	nazalog.Infof("< pullSession.Wait(). err=%+v", err)
 }
 
-func parseFlag() (inURL string, outFilename string, overTCP int) {
+func parseFlag() (inUrl string, outFilename string, overTcp int) {
 	i := flag.String("i", "", "specify pull rtsp url")
 	o := flag.String("o", "", "specify ouput flv file")
 	t := flag.Int("t", 0, "specify interleaved mode(rtp/rtcp over tcp)")
@@ -103,7 +78,7 @@ func parseFlag() (inURL string, outFilename string, overTCP int) {
   %s -i rtsp://localhost:5544/live/test110 -o out.flv -t 0
   %s -i rtsp://localhost:5544/live/test110 -o out.flv -t 1
 `, os.Args[0], os.Args[0])
-		base.OSExitAndWaitPressIfWindows(1)
+		base.OsExitAndWaitPressIfWindows(1)
 	}
 	return *i, *o, *t
 }

@@ -14,12 +14,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cfeeling/naza/pkg/nazalog"
+	"github.com/q191201771/naza/pkg/nazalog"
 
 	"github.com/cfeeling/lal/pkg/base"
 
 	"github.com/cfeeling/lal/pkg/logic"
-	"github.com/cfeeling/naza/pkg/bininfo"
+	"github.com/q191201771/naza/pkg/bininfo"
 )
 
 var sm *logic.ServerManager
@@ -28,7 +28,8 @@ func main() {
 	defer nazalog.Sync()
 
 	confFile := parseFlag()
-	logic.Entry(confFile)
+	logic.Init(confFile)
+	logic.RunLoop()
 }
 
 func parseFlag() string {
@@ -38,7 +39,7 @@ func parseFlag() string {
 
 	if *binInfoFlag {
 		_, _ = fmt.Fprint(os.Stderr, bininfo.StringifyMultiLine())
-		_, _ = fmt.Fprintln(os.Stderr, base.LALFullInfo)
+		_, _ = fmt.Fprintln(os.Stderr, base.LalFullInfo)
 		os.Exit(0)
 	}
 
@@ -53,6 +54,9 @@ func parseFlag() string {
 		filepath.FromSlash("lalserver.conf.json"),
 		filepath.FromSlash("./conf/lalserver.conf.json"),
 		filepath.FromSlash("../conf/lalserver.conf.json"),
+		filepath.FromSlash("../lalserver.conf.json"),
+		filepath.FromSlash("../../lalserver.conf.json"),
+		filepath.FromSlash("../../conf/lalserver.conf.json"),
 	}
 	for _, dcf := range defaultConfigFileList {
 		fi, err := os.Stat(dcf)
@@ -72,7 +76,7 @@ Example:
 
 Github: %s
 Doc: %s
-`, os.Args[0], filepath.FromSlash("./conf/lalserver.conf.json"), base.LALGithubSite, base.LALDocSite)
-	base.OSExitAndWaitPressIfWindows(1)
+`, os.Args[0], filepath.FromSlash("./conf/lalserver.conf.json"), base.LalGithubSite, base.LalDocSite)
+	base.OsExitAndWaitPressIfWindows(1)
 	return *cf
 }

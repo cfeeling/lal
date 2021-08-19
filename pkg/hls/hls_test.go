@@ -14,6 +14,6 @@ import (
 	"github.com/cfeeling/lal/pkg/innertest"
 )
 
-func TestHLS(t *testing.T) {
+func TestHls(t *testing.T) {
 	innertest.InnerTestEntry(t)
 }

@@ -1,3 +1,55 @@
+#### v0.24.0 (2021-07-31)
+
+- [feat] lalserver支持用rtsp sub协议拉取rtmp的pub推流 (#97)
+- [feat] 新增demo pullrtmp2pushrtsp，可以从远端拉取rtmp流并使用rtsp转推出去 (#96)
+- [feat] package rtprtcp: 支持h264，h265，aac rtp打包 (#83)
+- [feat] package sdp: 支持sdp打包 (#82)
+- [fix] 确保rtsp sub拉流从关键帧开始发送数据，避免因此引起的花屏
+- [fix] rtsp: 提高兼容性。兼容rtsp auth同时存在Digest和Basic两种字段的情况
+- [fix] rtsp: 提高兼容性。兼容rtsp摄像头的sdp中包含aac，但是没有config字段（后续也没有aac rtp包）的情况
+- [fix] rtmp: 提高兼容性。兼容rtmp client session处理对端回复两次publish或play信令的情况
+- [fix] rtmp: 提高兼容性。修复没有解析amf object中null类型数据导致和其他rtmp开源服务无法建连的问题 (#102)
+- [fix] rtmp: 信令打包参考本地chunk size
+- [fix] rtsp: 修复rtsp sub session没有正常释放导致协程泄漏的问题
+- [fix] 修复lalserver arm32编译失败的问题 (#92)
+- [fix] 修复lalserver http服务全部配置为不使用时崩溃的问题 (#58)
+- [fix] 修复hls.Muxer没有设置回调会导致崩溃的问题 (#101)
+- [fix] 修复demo calcrtmpdelay码率计算大了5倍的问题 (#58)
+- [refactor] package httpflv: 新增FlvFilePump，可循环匀速读取flv文件
+- [refactor] package aac: 增加adts, asc, seqheader间的转换代码；重构了整个包
+- [refactor] package avc: 部分函数提供复用传入参数内存和新申请内存两种实现
+- [refactor] demo benchrtmpconnect: 关闭日志，超时时长改为30秒，优化建连时长小于1毫秒的展示 (#58)
+- [chore] 增加Dockerfile (#91)
+
+#### v0.23.0 (2021-06-06)
+
+- [feat] HTTP端口复用：HTTP-FLV, HTTP-TS, HLS可使用相同的监听端口。HTTPS也支持端口复用 #64
+- [feat] HTTPS：HTTP-FLV，HTTP-TS，HLS都支持HTTPS。WebSocket-FLV，WebSocket-TS都支持WebSockets #76
+- [feat] 配置HTTP流的URL路径: HTTP-FLV，HTTP-TS，HLS的URL路由路径可以在配置文件中配置 #77
+- [feat] RTMP支持合并发送 #84
+- [refactor] 重构整个项目的命名风格 #87
+- [fix] RTMP GOP缓存设置为0时，可能花屏 #86
+- [feat] 支持海康威视NVR、大华IPC的RTSP流（SDP不包含SPS、PPS等数据，而是通过RTP包发送） #74 #85
+- [feat] 配置灵活易用话。增加`default_http`。HTTP-FLV，HTTP-TS，HLS可以独立配置监听地址相关的项，也可以使用公共的`default_http`
+- [feat] HLS默认提供两种播放URL地址 #64
+- [refactor] package hls: 将HTTP URL路径格式，文件存储路径格式，文件命名格式，映射关系抽象出来，业务方可在外层实现IPathSolver接口做定制 #77
+- [feat] 增加几个默认的配置文件加载路径
+- [feat] package rtprtcp: 增加用于将H264 Nalu包切割成RTP包的代码 #83
+- [refactor] package avc: 增加拆分AnndexB和AVCC Nalu包的代码 #79
+- [refactor] 重构httpflv.SubSession和httpts.SubSession的重复代码
+
+#### v0.22.0 (2021-05-03)
+
+- [feat] 录制新增支持：flv和mpegts文件。 录制支持列表见： https://pengrl.com/lal/#/LALServer (#14)
+- [feat] h265新增支持： hls拉流，hls录制；http-ts拉流，mpegts录制。h265支持列表见： https://pengrl.com/lal/#/LALServer (#65)
+- [feat] 拉流新增支持：websocket-flv，websocket-ts。拉流协议支持列表见： https://pengrl.com/lal/#/LALServer
+- [feat] hls: 支持内存切片。 (#50)
+- [fix] rtmp ClientSession握手，c2的发送时机，由收到s0s1s2改为收到s0s1就发送，解决握手失败的case。 (#42)
+- [fix] rtsp h265: 转rtmp时处理错误导致无法播放
+- [fix] rtsp h265: ffmpeg向lalserver推送rtsp h265报错。 (#55)
+- [test] travis ci: 自动化单元测试os增加osx, windows, arch增加arm64, ppc64le, s390x。 (#59)
+- [feat] rtmp ClientSession支持配置使用简单握手，复杂握手 (#68)
+
 #### v0.21.0 (2021-04-11)
 
 - [feat] package rtmp: 支持Aggregate Message

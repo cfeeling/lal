@@ -11,35 +11,35 @@ package rtsp
 import (
 	"net"
 
-	"github.com/cfeeling/naza/pkg/nazalog"
+	"github.com/q191201771/naza/pkg/nazalog"
 )
 
 type ServerObserver interface {
 	// @brief 使得上层有能力管理未进化到Pub、Sub阶段的Session
-	OnNewRTSPSessionConnect(session *ServerCommandSession)
+	OnNewRtspSessionConnect(session *ServerCommandSession)
 
 	// @brief 注意，对于已经进化到了Pub、Sub阶段的Session，该回调依然会被调用
-	OnDelRTSPSession(session *ServerCommandSession)
+	OnDelRtspSession(session *ServerCommandSession)
 
 	///////////////////////////////////////////////////////////////////////////
 
 	// @brief  Announce阶段回调
 	// @return 如果返回false，则表示上层要强制关闭这个推流请求
-	OnNewRTSPPubSession(session *PubSession) bool
+	OnNewRtspPubSession(session *PubSession) bool
 
-	OnDelRTSPPubSession(session *PubSession)
+	OnDelRtspPubSession(session *PubSession)
 
 	///////////////////////////////////////////////////////////////////////////
 
 	// @return 如果返回false，则表示上层要强制关闭这个拉流请求
 	// @return sdp
-	OnNewRTSPSubSessionDescribe(session *SubSession) (ok bool, sdp []byte)
+	OnNewRtspSubSessionDescribe(session *SubSession) (ok bool, sdp []byte)
 
 	// @brief Describe阶段回调
 	// @return ok  如果返回false，则表示上层要强制关闭这个拉流请求
-	OnNewRTSPSubSessionPlay(session *SubSession) bool
+	OnNewRtspSubSessionPlay(session *SubSession) bool
 
-	OnDelRTSPSubSession(session *SubSession)
+	OnDelRtspSubSession(session *SubSession)
 }
 
 type Server struct {
@@ -71,7 +71,7 @@ func (s *Server) RunLoop() error {
 		if err != nil {
 			return err
 		}
-		go s.handleTCPConnect(conn)
+		go s.handleTcpConnect(conn)
 	}
 }
 
@@ -85,41 +85,43 @@ func (s *Server) Dispose() {
 }
 
 // ServerCommandSessionObserver
-func (s *Server) OnNewRTSPPubSession(session *PubSession) bool {
-	return s.observer.OnNewRTSPPubSession(session)
+func (s *Server) OnNewRtspPubSession(session *PubSession) bool {
+	return s.observer.OnNewRtspPubSession(session)
 }
 
 // ServerCommandSessionObserver
-func (s *Server) OnNewRTSPSubSessionDescribe(session *SubSession) (ok bool, sdp []byte) {
-	return s.observer.OnNewRTSPSubSessionDescribe(session)
+func (s *Server) OnNewRtspSubSessionDescribe(session *SubSession) (ok bool, sdp []byte) {
+	return s.observer.OnNewRtspSubSessionDescribe(session)
 }
 
 // ServerCommandSessionObserver
-func (s *Server) OnNewRTSPSubSessionPlay(session *SubSession) bool {
-	return s.observer.OnNewRTSPSubSessionPlay(session)
+func (s *Server) OnNewRtspSubSessionPlay(session *SubSession) bool {
+	return s.observer.OnNewRtspSubSessionPlay(session)
 }
 
 // ServerCommandSessionObserver
-func (s *Server) OnDelRTSPPubSession(session *PubSession) {
-	s.observer.OnDelRTSPPubSession(session)
+func (s *Server) OnDelRtspPubSession(session *PubSession) {
+	s.observer.OnDelRtspPubSession(session)
 }
 
 // ServerCommandSessionObserver
-func (s *Server) OnDelRTSPSubSession(session *SubSession) {
-	s.observer.OnDelRTSPSubSession(session)
+func (s *Server) OnDelRtspSubSession(session *SubSession) {
+	s.observer.OnDelRtspSubSession(session)
 }
 
-func (s *Server) handleTCPConnect(conn net.Conn) {
+func (s *Server) handleTcpConnect(conn net.Conn) {
 	session := NewServerCommandSession(s, conn)
-	s.observer.OnNewRTSPSessionConnect(session)
+	s.observer.OnNewRtspSessionConnect(session)
 
 	err := session.RunLoop()
 	nazalog.Info(err)
 
 	if session.pubSession != nil {
-		s.observer.OnDelRTSPPubSession(session.pubSession)
+		s.observer.OnDelRtspPubSession(session.pubSession)
+		_ = session.pubSession.Dispose()
 	} else if session.subSession != nil {
-		s.observer.OnDelRTSPSubSession(session.subSession)
+		s.observer.OnDelRtspSubSession(session.subSession)
+		_ = session.subSession.Dispose()
 	}
-	s.observer.OnDelRTSPSession(session)
+	s.observer.OnDelRtspSession(session)
 }

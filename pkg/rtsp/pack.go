@@ -19,9 +19,9 @@ import (
 
 // CSeq
 var ResponseOptionsTmpl = "RTSP/1.0 200 OK\r\n" +
-	"Server: " + base.LALRTSPOptionsResponseServer + "\r\n" +
+	"Server: " + base.LalRtspOptionsResponseServer + "\r\n" +
 	"CSeq: %s\r\n" +
-	"Public:DESCRIBE, ANNOUNCE, SETUP, PLAY, PAUSE, RECORD, TEARDOWN\r\n" +
+	"Public: DESCRIBE, ANNOUNCE, SETUP, PLAY, PAUSE, RECORD, TEARDOWN\r\n" +
 	"\r\n"
 
 // rfc2326 10.3 ANNOUNCE
@@ -49,7 +49,7 @@ var ResponseSetupTmpl = "RTSP/1.0 200 OK\r\n" +
 	"CSeq: %s\r\n" +
 	"Date: %s\r\n" +
 	"Session: %s\r\n" +
-	"Transport:%s\r\n" +
+	"Transport: %s\r\n" +
 	"\r\n"
 
 // rfc2326 10.11 RECORD
@@ -93,11 +93,11 @@ func PackResponseDescribe(cseq, sdp string) string {
 func PackResponseSetup(cseq string, htv string) string {
 	date := time.Now().Format(time.RFC1123)
 
-	return fmt.Sprintf(ResponseSetupTmpl, cseq, date, sessionID, htv)
+	return fmt.Sprintf(ResponseSetupTmpl, cseq, date, sessionId, htv)
 }
 
 func PackResponseRecord(cseq string) string {
-	return fmt.Sprintf(ResponseRecordTmpl, cseq, sessionID)
+	return fmt.Sprintf(ResponseRecordTmpl, cseq, sessionId)
 }
 
 func PackResponsePlay(cseq string) string {

@@ -8,20 +8,33 @@
 
 package base
 
-type AVPacketPT int
+type AvPacketPt int
 
 const (
-	AVPacketPTUnknown AVPacketPT = -1
-	AVPacketPTAVC     AVPacketPT = RTPPacketTypeAVCOrHEVC
-	AVPacketPTHEVC    AVPacketPT = RTPPacketTypeHEVC
-	AVPacketPTAAC     AVPacketPT = RTPPacketTypeAAC
+	AvPacketPtUnknown AvPacketPt = -1
+	AvPacketPtAvc     AvPacketPt = RtpPacketTypeAvcOrHevc
+	AvPacketPtHevc    AvPacketPt = RtpPacketTypeHevc
+	AvPacketPtAac     AvPacketPt = RtpPacketTypeAac
 )
 
-// 目前供package rtsp使用。以后可能被多个package使用。
-// 不排除不同package使用时，字段含义也不同的情况出现。
-// 使用AVPacket的地方，应注明各字段的含义。
-type AVPacket struct {
+// 不同场景使用时，字段含义可能不同。
+// 使用AvPacket的地方，应注明各字段的含义。
+type AvPacket struct {
 	Timestamp   uint32
-	PayloadType AVPacketPT
+	PayloadType AvPacketPt
 	Payload     []byte
+}
+
+func (a AvPacketPt) ReadableString() string {
+	switch a {
+	case AvPacketPtUnknown:
+		return "unknown"
+	case AvPacketPtAvc:
+		return "avc"
+	case AvPacketPtHevc:
+		return "hevc"
+	case AvPacketPtAac:
+		return "aac"
+	}
+	return ""
 }

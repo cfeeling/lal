@@ -14,6 +14,6 @@ import (
 	"github.com/cfeeling/lal/pkg/innertest"
 )
 
-func TestRTMP(t *testing.T) {
+func TestRtmp(t *testing.T) {
 	innertest.InnerTestEntry(t)
 }

@@ -17,7 +17,7 @@ import (
 	"github.com/cfeeling/lal/pkg/base"
 	"github.com/cfeeling/lal/pkg/hls"
 	"github.com/cfeeling/lal/pkg/rtmp"
-	"github.com/cfeeling/naza/pkg/nazalog"
+	"github.com/q191201771/naza/pkg/nazalog"
 )
 
 func main() {
@@ -26,32 +26,31 @@ func main() {
 	})
 	defer nazalog.Sync()
 
-	url, hlsOutPath, fragmentDurationMS, fragmentNum := parseFlag()
-	nazalog.Infof("parse flag succ. url=%s, hlsOutPath=%s, fragmentDurationMS=%d, fragmentNum=%d",
-		url, hlsOutPath, fragmentDurationMS, fragmentNum)
+	url, hlsOutPath, fragmentDurationMs, fragmentNum := parseFlag()
+	nazalog.Infof("parse flag succ. url=%s, hlsOutPath=%s, fragmentDurationMs=%d, fragmentNum=%d",
+		url, hlsOutPath, fragmentDurationMs, fragmentNum)
 
 	hlsMuxerConfig := hls.MuxerConfig{
-		Enable:             true,
 		OutPath:            hlsOutPath,
-		FragmentDurationMS: fragmentDurationMS,
+		FragmentDurationMs: fragmentDurationMs,
 		FragmentNum:        fragmentNum,
 	}
 
-	ctx, err := base.ParseRTMPURL(url)
+	ctx, err := base.ParseRtmpUrl(url)
 	if err != nil {
 		nazalog.Fatalf("parse rtmp url failed. url=%s, err=%+v", url, err)
 	}
 	streamName := ctx.LastItemOfPath
 
-	hlsMuexer := hls.NewMuxer(streamName, &hlsMuxerConfig, nil, nil)
+	hlsMuexer := hls.NewMuxer(streamName, true, &hlsMuxerConfig, nil)
 	hlsMuexer.Start()
 
 	pullSession := rtmp.NewPullSession(func(option *rtmp.PullSessionOption) {
-		option.PullTimeoutMS = 10000
-		option.ReadAVTimeoutMS = 10000
+		option.PullTimeoutMs = 10000
+		option.ReadAvTimeoutMs = 10000
 	})
-	err = pullSession.Pull(url, func(msg base.RTMPMsg) {
-		hlsMuexer.FeedRTMPMessage(msg)
+	err = pullSession.Pull(url, func(msg base.RtmpMsg) {
+		hlsMuexer.FeedRtmpMessage(msg)
 	})
 
 	if err != nil {
@@ -61,7 +60,7 @@ func main() {
 	nazalog.Errorf("< session.Wait [%s] err=%+v", pullSession.UniqueKey(), err)
 }
 
-func parseFlag() (url string, hlsOutPath string, fragmentDurationMS int, fragmentNum int) {
+func parseFlag() (url string, hlsOutPath string, fragmentDurationMs int, fragmentNum int) {
 	i := flag.String("i", "", "specify pull rtmp url")
 	o := flag.String("o", "", "specify ouput hls file")
 	d := flag.Int("d", 3000, "specify duration of each ts file in millisecond")
@@ -71,10 +70,10 @@ func parseFlag() (url string, hlsOutPath string, fragmentDurationMS int, fragmen
 		flag.Usage()
 		eo := filepath.FromSlash("./pullrtmp2hls/")
 		_, _ = fmt.Fprintf(os.Stderr, `Example:
-  %s -i rtmp://127.0.0.1:19350/live/test110 -o %s
-  %s -i rtmp://127.0.0.1:19350/live/test110 -o %s -d 5000 -n 5
+  %s -i rtmp://127.0.0.1:1935/live/test110 -o %s
+  %s -i rtmp://127.0.0.1:1935/live/test110 -o %s -d 5000 -n 5
 `, os.Args[0], eo, os.Args[0], eo)
-		base.OSExitAndWaitPressIfWindows(1)
+		base.OsExitAndWaitPressIfWindows(1)
 	}
 	return *i, *o, *d, *n
 }

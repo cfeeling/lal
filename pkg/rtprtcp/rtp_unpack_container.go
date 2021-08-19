@@ -8,35 +8,35 @@
 
 package rtprtcp
 
-type RTPPacketListItem struct {
-	packet RTPPacket
-	next   *RTPPacketListItem
+type RtpPacketListItem struct {
+	Packet RtpPacket
+	Next   *RtpPacketListItem
 }
 
-type RTPPacketList struct {
-	head RTPPacketListItem // 哨兵，自身不存放rtp包，第一个rtp包存在在head.next中
-	size int               // 实际元素个数
+type RtpPacketList struct {
+	Head RtpPacketListItem // 哨兵，自身不存放rtp包，第一个rtp包存在在head.next中
+	Size int               // 实际元素个数
 }
 
-type RTPUnpackContainer struct {
+type RtpUnpackContainer struct {
 	maxSize int
 
-	unpackerProtocol IRTPUnpackerProtocol
+	unpackerProtocol IRtpUnpackerProtocol
 
-	list         RTPPacketList
+	list         RtpPacketList
 	unpackedFlag bool   // 是否成功合成过
 	unpackedSeq  uint16 // 成功合成的最后一个seq号
 }
 
-func NewRTPUnpackContainer(maxSize int, unpackerProtocol IRTPUnpackerProtocol) *RTPUnpackContainer {
-	return &RTPUnpackContainer{
+func NewRtpUnpackContainer(maxSize int, unpackerProtocol IRtpUnpackerProtocol) *RtpUnpackContainer {
+	return &RtpUnpackContainer{
 		maxSize:          maxSize,
 		unpackerProtocol: unpackerProtocol,
 	}
 }
 
 // 输入收到的rtp包
-func (r *RTPUnpackContainer) Feed(pkt RTPPacket) {
+func (r *RtpUnpackContainer) Feed(pkt RtpPacket) {
 	// 过期的包
 	if r.isStale(pkt.Header.Seq) {
 		return
@@ -62,14 +62,14 @@ func (r *RTPUnpackContainer) Feed(pkt RTPPacket) {
 	}
 
 	// 缓存达到最大值
-	if r.list.size > r.maxSize {
+	if r.list.Size > r.maxSize {
 		// 尝试合成一帧发生跳跃的帧
 		packed := r.tryUnpackOne()
 
 		if !packed {
 			// 合成失败了，丢弃一包过期数据
-			r.list.head.next = r.list.head.next.next
-			r.list.size--
+			r.list.Head.Next = r.list.Head.Next.Next
+			r.list.Size--
 		} else {
 			// 合成成功了，再次尝试，尽可能多的合成顺序的帧
 			for {
@@ -86,7 +86,7 @@ func (r *RTPUnpackContainer) Feed(pkt RTPPacket) {
 // @return true  表示过期
 //         false 没过期
 //
-func (r *RTPUnpackContainer) isStale(seq uint16) bool {
+func (r *RtpUnpackContainer) isStale(seq uint16) bool {
 	// 从来没有合成成功过
 	if !r.unpackedFlag {
 		return false
@@ -96,42 +96,42 @@ func (r *RTPUnpackContainer) isStale(seq uint16) bool {
 }
 
 // 将rtp包按seq排序插入队列中
-func (r *RTPUnpackContainer) insert(pkt RTPPacket) {
-	r.list.size++
+func (r *RtpUnpackContainer) insert(pkt RtpPacket) {
+	r.list.Size++
 
-	p := &r.list.head
-	for ; p.next != nil; p = p.next {
-		res := CompareSeq(pkt.Header.Seq, p.next.packet.Header.Seq)
+	p := &r.list.Head
+	for ; p.Next != nil; p = p.Next {
+		res := CompareSeq(pkt.Header.Seq, p.Next.Packet.Header.Seq)
 		switch res {
 		case 0:
 			return
 		case 1:
 			// noop
 		case -1:
-			item := &RTPPacketListItem{
-				packet: pkt,
-				next:   p.next,
+			item := &RtpPacketListItem{
+				Packet: pkt,
+				Next:   p.Next,
 			}
-			p.next = item
+			p.Next = item
 			return
 		}
 	}
 
-	item := &RTPPacketListItem{
-		packet: pkt,
-		next:   p.next,
+	item := &RtpPacketListItem{
+		Packet: pkt,
+		Next:   p.Next,
 	}
-	p.next = item
+	p.Next = item
 }
 
 // 从队列头部，尝试合成一个完整的帧。保证这次合成的帧的首个seq和上次合成帧的尾部seq是连续的
-func (r *RTPUnpackContainer) tryUnpackOneSequential() bool {
+func (r *RtpUnpackContainer) tryUnpackOneSequential() bool {
 	if r.unpackedFlag {
-		first := r.list.head.next
+		first := r.list.Head.Next
 		if first == nil {
 			return false
 		}
-		if SubSeq(first.packet.Header.Seq, r.unpackedSeq) != 1 {
+		if SubSeq(first.Packet.Header.Seq, r.unpackedSeq) != 1 {
 			return false
 		}
 	}
@@ -140,7 +140,7 @@ func (r *RTPUnpackContainer) tryUnpackOneSequential() bool {
 }
 
 // 从队列头部，尝试合成一个完整的帧。不保证这次合成的帧的首个seq和上次合成帧的尾部seq是连续的
-func (r *RTPUnpackContainer) tryUnpackOne() bool {
+func (r *RtpUnpackContainer) tryUnpackOne() bool {
 	unpackedFlag, unpackedSeq := r.unpackerProtocol.TryUnpackOne(&r.list)
 	if unpackedFlag {
 		r.unpackedFlag = unpackedFlag

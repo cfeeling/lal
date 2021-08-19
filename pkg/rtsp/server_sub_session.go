@@ -11,26 +11,30 @@ package rtsp
 import (
 	"github.com/cfeeling/lal/pkg/rtprtcp"
 	"github.com/cfeeling/lal/pkg/sdp"
-	"github.com/cfeeling/naza/pkg/nazaerrors"
+	"github.com/q191201771/naza/pkg/nazaerrors"
 
 	"github.com/cfeeling/lal/pkg/base"
-	"github.com/cfeeling/naza/pkg/nazalog"
-	"github.com/cfeeling/naza/pkg/nazanet"
+	"github.com/q191201771/naza/pkg/nazalog"
+	"github.com/q191201771/naza/pkg/nazanet"
 )
 
 type SubSession struct {
 	uniqueKey      string // const after ctor
-	urlCtx         base.URLContext
+	urlCtx         base.UrlContext
 	cmdSession     *ServerCommandSession
 	baseOutSession *BaseOutSession
+
+	ShouldWaitVideoKeyFrame bool
 }
 
-func NewSubSession(urlCtx base.URLContext, cmdSession *ServerCommandSession) *SubSession {
-	uk := base.GenUKRTSPSubSession()
+func NewSubSession(urlCtx base.UrlContext, cmdSession *ServerCommandSession) *SubSession {
+	uk := base.GenUkRtspSubSession()
 	s := &SubSession{
 		uniqueKey:  uk,
 		urlCtx:     urlCtx,
 		cmdSession: cmdSession,
+
+		ShouldWaitVideoKeyFrame: true,
 	}
 	baseOutSession := NewBaseOutSession(uk, s)
 	s.baseOutSession = baseOutSession
@@ -38,11 +42,11 @@ func NewSubSession(urlCtx base.URLContext, cmdSession *ServerCommandSession) *Su
 	return s
 }
 
-func (session *SubSession) InitWithSDP(rawSDP []byte, sdpLogicCtx sdp.LogicContext) {
-	session.baseOutSession.InitWithSDP(rawSDP, sdpLogicCtx)
+func (session *SubSession) InitWithSdp(sdpCtx sdp.LogicContext) {
+	session.baseOutSession.InitWithSdp(sdpCtx)
 }
 
-func (session *SubSession) SetupWithConn(uri string, rtpConn, rtcpConn *nazanet.UDPConnection) error {
+func (session *SubSession) SetupWithConn(uri string, rtpConn, rtcpConn *nazanet.UdpConnection) error {
 	return session.baseOutSession.SetupWithConn(uri, rtpConn, rtcpConn)
 }
 
@@ -50,8 +54,8 @@ func (session *SubSession) SetupWithChannel(uri string, rtpChannel, rtcpChannel 
 	return session.baseOutSession.SetupWithChannel(uri, rtpChannel, rtcpChannel)
 }
 
-func (session *SubSession) WriteRTPPacket(packet rtprtcp.RTPPacket) {
-	session.baseOutSession.WriteRTPPacket(packet)
+func (session *SubSession) WriteRtpPacket(packet rtprtcp.RtpPacket) {
+	session.baseOutSession.WriteRtpPacket(packet)
 }
 
 func (session *SubSession) Dispose() error {
@@ -65,8 +69,8 @@ func (session *SubSession) HandleInterleavedPacket(b []byte, channel int) {
 	session.baseOutSession.HandleInterleavedPacket(b, channel)
 }
 
-func (session *SubSession) URL() string {
-	return session.urlCtx.URL
+func (session *SubSession) Url() string {
+	return session.urlCtx.Url
 }
 
 func (session *SubSession) AppName() string {

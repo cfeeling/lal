@@ -32,6 +32,8 @@ type MuxerObserver interface {
 	OnTsPackets(rawFrame []byte, boundary bool)
 }
 
+type CustomCleanUpCallback func(m *Muxer, isLast bool)
+
 type MuxerConfig struct {
 	OutPath            string `json:"out_path"` // m3u8和ts文件的输出根目录，注意，末尾需以'/'结束
 	FragmentDurationMs int    `json:"fragment_duration_ms"`
@@ -45,12 +47,16 @@ type MuxerConfig struct {
 	// 2 推流过程中，持续删除过期的ts文件，只保留最近的<fragment_num> * 2个左右的ts文件
 	// TODO chef: lalserver的模式1的逻辑是在上层做的，应该重构到hls模块中
 	CleanupMode int `json:"cleanup_mode"`
+
+	cleanupCustomCallback CustomCleanUpCallback
 }
 
 const (
 	CleanupModeNever    = 0
 	CleanupModeInTheEnd = 1
 	CleanupModeAsap     = 2
+	// 自定义清理过程
+	CleanupCustomHandler = 99
 )
 
 // 输入rtmp流，转出hls(m3u8+ts)至文件中，并回调给上层转出ts流
@@ -332,6 +338,10 @@ func (m *Muxer) closeFragment(isLast bool) error {
 
 	if m.config.CleanupMode == CleanupModeNever || m.config.CleanupMode == CleanupModeInTheEnd {
 		m.writeRecordPlaylist(isLast)
+	}
+
+	if m.enable && m.config.CleanupMode == CleanupCustomHandler && m.config.cleanupCustomCallback != nil {
+		m.config.cleanupCustomCallback(m, isLast)
 	}
 
 	if m.config.CleanupMode == CleanupModeAsap {

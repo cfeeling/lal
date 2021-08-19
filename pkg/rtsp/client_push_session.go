@@ -12,25 +12,29 @@ import (
 	"github.com/cfeeling/lal/pkg/base"
 	"github.com/cfeeling/lal/pkg/rtprtcp"
 	"github.com/cfeeling/lal/pkg/sdp"
-	"github.com/cfeeling/naza/pkg/nazaerrors"
-	"github.com/cfeeling/naza/pkg/nazalog"
-	"github.com/cfeeling/naza/pkg/nazanet"
+	"github.com/q191201771/naza/pkg/nazaerrors"
+	"github.com/q191201771/naza/pkg/nazalog"
+	"github.com/q191201771/naza/pkg/nazanet"
+	"sync"
 )
 
 type PushSessionOption struct {
-	PushTimeoutMS int
-	OverTCP       bool
+	PushTimeoutMs int
+	OverTcp       bool
 }
 
 var defaultPushSessionOption = PushSessionOption{
-	PushTimeoutMS: 10000,
-	OverTCP:       false,
+	PushTimeoutMs: 10000,
+	OverTcp:       false,
 }
 
 type PushSession struct {
 	uniqueKey      string
 	cmdSession     *ClientCommandSession
 	baseOutSession *BaseOutSession
+
+	disposeOnce sync.Once
+	waitChan    chan error
 }
 
 type ModPushSessionOption func(option *PushSessionOption)
@@ -41,13 +45,14 @@ func NewPushSession(modOptions ...ModPushSessionOption) *PushSession {
 		fn(&option)
 	}
 
-	uk := base.GenUKRTSPPushSession()
+	uk := base.GenUkRtspPushSession()
 	s := &PushSession{
 		uniqueKey: uk,
+		waitChan:  make(chan error, 1),
 	}
-	cmdSession := NewClientCommandSession(CCSTPushSession, uk, s, func(opt *ClientCommandSessionOption) {
-		opt.DoTimeoutMS = option.PushTimeoutMS
-		opt.OverTCP = option.OverTCP
+	cmdSession := NewClientCommandSession(CcstPushSession, uk, s, func(opt *ClientCommandSessionOption) {
+		opt.DoTimeoutMs = option.PushTimeoutMs
+		opt.OverTcp = option.OverTcp
 	})
 	baseOutSession := NewBaseOutSession(uk, s)
 	s.cmdSession = cmdSession
@@ -56,47 +61,97 @@ func NewPushSession(modOptions ...ModPushSessionOption) *PushSession {
 	return s
 }
 
-// 阻塞直到和对端完成推流前，握手部分的工作（也即收到RTSP Record response），或者发生错误
-func (session *PushSession) Push(rawURL string, rawSDP []byte, sdpLogicCtx sdp.LogicContext) error {
-	nazalog.Debugf("[%s] push. url=%s", session.uniqueKey, rawURL)
-	session.cmdSession.InitWithSDP(rawSDP, sdpLogicCtx)
-	session.baseOutSession.InitWithSDP(rawSDP, sdpLogicCtx)
-	return session.cmdSession.Do(rawURL)
+// Push 阻塞直到和对端完成推流前，握手部分的工作（也即收到RTSP Record response），或者发生错误
+//
+func (session *PushSession) Push(rawUrl string, sdpCtx sdp.LogicContext) error {
+	nazalog.Debugf("[%s] push. url=%s", session.uniqueKey, rawUrl)
+	session.cmdSession.InitWithSdp(sdpCtx)
+	session.baseOutSession.InitWithSdp(sdpCtx)
+	if err := session.cmdSession.Do(rawUrl); err != nil {
+		return err
+	}
+
+	go func() {
+		var cmdSessionDisposed, baseInSessionDisposed bool
+		var retErr error
+		var retErrFlag bool
+	LOOP:
+		for {
+			var err error
+			select {
+			case err = <-session.cmdSession.WaitChan():
+				if err != nil {
+					_ = session.baseOutSession.Dispose()
+				}
+				if cmdSessionDisposed {
+					nazalog.Errorf("[%s] cmd session disposed already.", session.uniqueKey)
+				}
+				cmdSessionDisposed = true
+			case err = <-session.baseOutSession.WaitChan():
+				// err是nil时，表示是被PullSession::Dispose主动销毁，那么cmdSession也会被销毁，就不需要我们再调用cmdSession.Dispose了
+				if err != nil {
+					_ = session.cmdSession.Dispose()
+				}
+				if baseInSessionDisposed {
+					nazalog.Errorf("[%s] base in session disposed already.", session.uniqueKey)
+				}
+				baseInSessionDisposed = true
+			} // select loop
+
+			// 第一个错误作为返回值
+			if !retErrFlag {
+				retErr = err
+				retErrFlag = true
+			}
+			if cmdSessionDisposed && baseInSessionDisposed {
+				break LOOP
+			}
+		} // for loop
+
+		session.waitChan <- retErr
+	}()
+
+	return nil
 }
 
-func (session *PushSession) WriteRTPPacket(packet rtprtcp.RTPPacket) {
-	session.baseOutSession.WriteRTPPacket(packet)
+func (session *PushSession) WriteRtpPacket(packet rtprtcp.RtpPacket) error {
+	return session.baseOutSession.WriteRtpPacket(packet)
 }
 
-// 文档请参考： interface IClientSessionLifecycle
+// ---------------------------------------------------------------------------------------------------------------------
+// IClientSessionLifecycle interface
+// ---------------------------------------------------------------------------------------------------------------------
+
+// Dispose 文档请参考： IClientSessionLifecycle interface
+//
 func (session *PushSession) Dispose() error {
-	nazalog.Infof("[%s] lifecycle dispose rtsp PushSession. session=%p", session.uniqueKey, session)
-	e1 := session.cmdSession.Dispose()
-	e2 := session.baseOutSession.Dispose()
-	return nazaerrors.CombineErrors(e1, e2)
+	return session.dispose(nil)
 }
 
-// 文档请参考： interface IClientSessionLifecycle
+// WaitChan 文档请参考： IClientSessionLifecycle interface
+//
 func (session *PushSession) WaitChan() <-chan error {
-	return session.cmdSession.WaitChan()
+	return session.waitChan
 }
 
-// 文档请参考： interface ISessionURLContext
-func (session *PushSession) URL() string {
-	return session.cmdSession.URL()
+// ---------------------------------------------------------------------------------------------------------------------
+
+// 文档请参考： interface ISessionUrlContext
+func (session *PushSession) Url() string {
+	return session.cmdSession.Url()
 }
 
-// 文档请参考： interface ISessionURLContext
+// 文档请参考： interface ISessionUrlContext
 func (session *PushSession) AppName() string {
 	return session.cmdSession.AppName()
 }
 
-// 文档请参考： interface ISessionURLContext
+// 文档请参考： interface ISessionUrlContext
 func (session *PushSession) StreamName() string {
 	return session.cmdSession.StreamName()
 }
 
-// 文档请参考： interface ISessionURLContext
+// 文档请参考： interface ISessionUrlContext
 func (session *PushSession) RawQuery() string {
 	return session.cmdSession.RawQuery()
 }
@@ -129,12 +184,12 @@ func (session *PushSession) OnConnectResult() {
 }
 
 // ClientCommandSessionObserver, callback by ClientCommandSession
-func (session *PushSession) OnDescribeResponse(rawSDP []byte, sdpLogicCtx sdp.LogicContext) {
+func (session *PushSession) OnDescribeResponse(sdpCtx sdp.LogicContext) {
 	// noop
 }
 
 // ClientCommandSessionObserver, callback by ClientCommandSession
-func (session *PushSession) OnSetupWithConn(uri string, rtpConn, rtcpConn *nazanet.UDPConnection) {
+func (session *PushSession) OnSetupWithConn(uri string, rtpConn, rtcpConn *nazanet.UdpConnection) {
 	_ = session.baseOutSession.SetupWithConn(uri, rtpConn, rtcpConn)
 }
 
@@ -156,4 +211,15 @@ func (session *PushSession) OnInterleavedPacket(packet []byte, channel int) {
 // IInterleavedPacketWriter, callback by BaseOutSession
 func (session *PushSession) WriteInterleavedPacket(packet []byte, channel int) error {
 	return session.cmdSession.WriteInterleavedPacket(packet, channel)
+}
+
+func (session *PushSession) dispose(err error) error {
+	var retErr error
+	session.disposeOnce.Do(func() {
+		nazalog.Infof("[%s] lifecycle dispose rtsp PushSession. session=%p", session.uniqueKey, session)
+		e1 := session.cmdSession.Dispose()
+		e2 := session.baseOutSession.Dispose()
+		retErr = nazaerrors.CombineErrors(e1, e2)
+	})
+	return retErr
 }

@@ -11,34 +11,36 @@ package rtsp
 import (
 	"encoding/hex"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/cfeeling/lal/pkg/rtprtcp"
-	"github.com/cfeeling/naza/pkg/nazaerrors"
-	"github.com/cfeeling/naza/pkg/nazastring"
+	"github.com/q191201771/naza/pkg/nazaerrors"
+	"github.com/q191201771/naza/pkg/nazastring"
 
 	"github.com/cfeeling/lal/pkg/base"
 	"github.com/cfeeling/lal/pkg/sdp"
-	"github.com/cfeeling/naza/pkg/connection"
-	"github.com/cfeeling/naza/pkg/nazalog"
-	"github.com/cfeeling/naza/pkg/nazanet"
+	"github.com/q191201771/naza/pkg/connection"
+	"github.com/q191201771/naza/pkg/nazalog"
+	"github.com/q191201771/naza/pkg/nazanet"
 )
 
+// out的含义是音视频由本端发送至对端
+//
 type BaseOutSession struct {
 	uniqueKey  string
 	cmdSession IInterleavedPacketWriter
 
-	rawSDP      []byte
-	sdpLogicCtx sdp.LogicContext
+	sdpCtx sdp.LogicContext
 
-	audioRTPConn     *nazanet.UDPConnection
-	videoRTPConn     *nazanet.UDPConnection
-	audioRTCPConn    *nazanet.UDPConnection
-	videoRTCPConn    *nazanet.UDPConnection
-	audioRTPChannel  int
-	audioRTCPChannel int
-	videoRTPChannel  int
-	videoRTCPChannel int
+	audioRtpConn     *nazanet.UdpConnection
+	videoRtpConn     *nazanet.UdpConnection
+	audioRtcpConn    *nazanet.UdpConnection
+	videoRtcpConn    *nazanet.UdpConnection
+	audioRtpChannel  int
+	audioRtcpChannel int
+	videoRtpChannel  int
+	videoRtcpChannel int
 
 	stat         base.StatSession
 	currConnStat connection.StatAtomic
@@ -47,9 +49,12 @@ type BaseOutSession struct {
 
 	// only for debug log
 	debugLogMaxCount         int
-	loggedWriteAudioRTPCount int
-	loggedWriteVideoRTPCount int
-	loggedReadUDPCount       int
+	loggedWriteAudioRtpCount int
+	loggedWriteVideoRtpCount int
+	loggedReadUdpCount       int
+
+	disposeOnce sync.Once
+	waitChan    chan error
 }
 
 func NewBaseOutSession(uniqueKey string, cmdSession IInterleavedPacketWriter) *BaseOutSession {
@@ -57,119 +62,127 @@ func NewBaseOutSession(uniqueKey string, cmdSession IInterleavedPacketWriter) *B
 		uniqueKey:  uniqueKey,
 		cmdSession: cmdSession,
 		stat: base.StatSession{
-			Protocol:  base.ProtocolRTSP,
-			SessionID: uniqueKey,
+			Protocol:  base.ProtocolRtsp,
+			SessionId: uniqueKey,
 			StartTime: time.Now().Format("2006-01-02 15:04:05.999"),
 		},
-		audioRTPChannel:  -1,
-		videoRTPChannel:  -1,
+		audioRtpChannel:  -1,
+		videoRtpChannel:  -1,
 		debugLogMaxCount: 3,
+		waitChan:         make(chan error, 1),
 	}
 	nazalog.Infof("[%s] lifecycle new rtsp BaseOutSession. session=%p", uniqueKey, s)
 	return s
 }
 
-func (session *BaseOutSession) InitWithSDP(rawSDP []byte, sdpLogicCtx sdp.LogicContext) {
-	session.rawSDP = rawSDP
-	session.sdpLogicCtx = sdpLogicCtx
+func (session *BaseOutSession) InitWithSdp(sdpCtx sdp.LogicContext) {
+	session.sdpCtx = sdpCtx
 }
 
-func (session *BaseOutSession) SetupWithConn(uri string, rtpConn, rtcpConn *nazanet.UDPConnection) error {
-	if session.sdpLogicCtx.IsAudioURI(uri) {
-		session.audioRTPConn = rtpConn
-		session.audioRTCPConn = rtcpConn
-	} else if session.sdpLogicCtx.IsVideoURI(uri) {
-		session.videoRTPConn = rtpConn
-		session.videoRTCPConn = rtcpConn
+func (session *BaseOutSession) SetupWithConn(uri string, rtpConn, rtcpConn *nazanet.UdpConnection) error {
+	if session.sdpCtx.IsAudioUri(uri) {
+		session.audioRtpConn = rtpConn
+		session.audioRtcpConn = rtcpConn
+	} else if session.sdpCtx.IsVideoUri(uri) {
+		session.videoRtpConn = rtpConn
+		session.videoRtcpConn = rtcpConn
 	} else {
-		return ErrRTSP
+		return ErrRtsp
 	}
 
-	go rtpConn.RunLoop(session.onReadUDPPacket)
-	go rtcpConn.RunLoop(session.onReadUDPPacket)
+	go rtpConn.RunLoop(session.onReadUdpPacket)
+	go rtcpConn.RunLoop(session.onReadUdpPacket)
 
 	return nil
 }
 
 func (session *BaseOutSession) SetupWithChannel(uri string, rtpChannel, rtcpChannel int) error {
-	if session.sdpLogicCtx.IsAudioURI(uri) {
-		session.audioRTPChannel = rtpChannel
-		session.audioRTCPChannel = rtcpChannel
+	if session.sdpCtx.IsAudioUri(uri) {
+		session.audioRtpChannel = rtpChannel
+		session.audioRtcpChannel = rtcpChannel
 		return nil
-	} else if session.sdpLogicCtx.IsVideoURI(uri) {
-		session.videoRTPChannel = rtpChannel
-		session.videoRTCPChannel = rtcpChannel
+	} else if session.sdpCtx.IsVideoUri(uri) {
+		session.videoRtpChannel = rtpChannel
+		session.videoRtcpChannel = rtcpChannel
 		return nil
 	}
 
-	return ErrRTSP
+	return ErrRtsp
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+// IClientSessionLifecycle interface
+// ---------------------------------------------------------------------------------------------------------------------
+
+// Dispose 文档请参考： IClientSessionLifecycle interface
+//
 func (session *BaseOutSession) Dispose() error {
-	nazalog.Infof("[%s] lifecycle dispose rtsp BaseOutSession. session=%p", session.uniqueKey, session)
-	var e1, e2, e3, e4 error
-	if session.audioRTPConn != nil {
-		e1 = session.audioRTPConn.Dispose()
-	}
-	if session.audioRTCPConn != nil {
-		e2 = session.audioRTCPConn.Dispose()
-	}
-	if session.videoRTPConn != nil {
-		e3 = session.videoRTPConn.Dispose()
-	}
-	if session.videoRTCPConn != nil {
-		e4 = session.videoRTCPConn.Dispose()
-	}
-	return nazaerrors.CombineErrors(e1, e2, e3, e4)
+	return session.dispose(nil)
 }
+
+// WaitChan 文档请参考： IClientSessionLifecycle interface
+//
+// 注意，目前只有一种情况，即上层主动调用Dispose函数，此时error为nil
+//
+func (session *BaseOutSession) WaitChan() <-chan error {
+	return session.waitChan
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 
 func (session *BaseOutSession) HandleInterleavedPacket(b []byte, channel int) {
 	switch channel {
-	case session.audioRTPChannel:
+	case session.audioRtpChannel:
 		fallthrough
-	case session.videoRTPChannel:
+	case session.videoRtpChannel:
 		nazalog.Warnf("[%s] not supposed to read packet in rtp channel of BaseOutSession. channel=%d, len=%d", session.uniqueKey, channel, len(b))
-	case session.audioRTCPChannel:
+	case session.audioRtcpChannel:
 		fallthrough
-	case session.videoRTCPChannel:
+	case session.videoRtcpChannel:
 		nazalog.Debugf("[%s] read interleaved rtcp packet. b=%s", session.uniqueKey, hex.Dump(nazastring.SubSliceSafety(b, 32)))
 	default:
 		nazalog.Errorf("[%s] read interleaved packet but channel invalid. channel=%d", session.uniqueKey, channel)
 	}
 }
 
-func (session *BaseOutSession) WriteRTPPacket(packet rtprtcp.RTPPacket) {
-	session.currConnStat.WroteBytesSum.Add(uint64(len(packet.Raw)))
+func (session *BaseOutSession) WriteRtpPacket(packet rtprtcp.RtpPacket) error {
+	var err error
 
 	// 发送数据时，保证和sdp的原始类型对应
 	t := int(packet.Header.PacketType)
-	if session.sdpLogicCtx.IsAudioPayloadTypeOrigin(t) {
-		if session.loggedWriteAudioRTPCount < session.debugLogMaxCount {
+	if session.sdpCtx.IsAudioPayloadTypeOrigin(t) {
+		if session.loggedWriteAudioRtpCount < session.debugLogMaxCount {
 			nazalog.Debugf("[%s] LOGPACKET. write audio rtp=%+v", session.uniqueKey, packet.Header)
-			session.loggedWriteAudioRTPCount++
+			session.loggedWriteAudioRtpCount++
 		}
 
-		if session.audioRTPConn != nil {
-			_ = session.audioRTPConn.Write(packet.Raw)
+		if session.audioRtpConn != nil {
+			err = session.audioRtpConn.Write(packet.Raw)
 		}
-		if session.audioRTPChannel != -1 {
-			_ = session.cmdSession.WriteInterleavedPacket(packet.Raw, session.audioRTPChannel)
+		if session.audioRtpChannel != -1 {
+			err = session.cmdSession.WriteInterleavedPacket(packet.Raw, session.audioRtpChannel)
 		}
-	} else if session.sdpLogicCtx.IsVideoPayloadTypeOrigin(t) {
-		if session.loggedWriteVideoRTPCount < session.debugLogMaxCount {
+	} else if session.sdpCtx.IsVideoPayloadTypeOrigin(t) {
+		if session.loggedWriteVideoRtpCount < session.debugLogMaxCount {
 			nazalog.Debugf("[%s] LOGPACKET. write video rtp=%+v", session.uniqueKey, packet.Header)
-			session.loggedWriteVideoRTPCount++
+			session.loggedWriteVideoRtpCount++
 		}
 
-		if session.videoRTPConn != nil {
-			_ = session.videoRTPConn.Write(packet.Raw)
+		if session.videoRtpConn != nil {
+			err = session.videoRtpConn.Write(packet.Raw)
 		}
-		if session.videoRTPChannel != -1 {
-			_ = session.cmdSession.WriteInterleavedPacket(packet.Raw, session.videoRTPChannel)
+		if session.videoRtpChannel != -1 {
+			err = session.cmdSession.WriteInterleavedPacket(packet.Raw, session.videoRtpChannel)
 		}
 	} else {
 		nazalog.Errorf("[%s] write rtp packet but type invalid. type=%d", session.uniqueKey, t)
+		err = ErrRtsp
 	}
+
+	if err == nil {
+		session.currConnStat.WroteBytesSum.Add(uint64(len(packet.Raw)))
+	}
+	return err
 }
 
 func (session *BaseOutSession) GetStat() base.StatSession {
@@ -211,12 +224,37 @@ func (session *BaseOutSession) UniqueKey() string {
 	return session.uniqueKey
 }
 
-func (session *BaseOutSession) onReadUDPPacket(b []byte, rAddr *net.UDPAddr, err error) bool {
+func (session *BaseOutSession) onReadUdpPacket(b []byte, rAddr *net.UDPAddr, err error) bool {
 	// TODO chef: impl me
 
-	if session.loggedReadUDPCount < session.debugLogMaxCount {
+	if session.loggedReadUdpCount < session.debugLogMaxCount {
 		nazalog.Debugf("[%s] LOGPACKET. read udp=%s", session.uniqueKey, hex.Dump(nazastring.SubSliceSafety(b, 32)))
-		session.loggedReadUDPCount++
+		session.loggedReadUdpCount++
 	}
 	return true
+}
+
+func (session *BaseOutSession) dispose(err error) error {
+	var retErr error
+	session.disposeOnce.Do(func() {
+		nazalog.Infof("[%s] lifecycle dispose rtsp BaseOutSession. session=%p", session.uniqueKey, session)
+		var e1, e2, e3, e4 error
+		if session.audioRtpConn != nil {
+			e1 = session.audioRtpConn.Dispose()
+		}
+		if session.audioRtcpConn != nil {
+			e2 = session.audioRtcpConn.Dispose()
+		}
+		if session.videoRtpConn != nil {
+			e3 = session.videoRtpConn.Dispose()
+		}
+		if session.videoRtcpConn != nil {
+			e4 = session.videoRtcpConn.Dispose()
+		}
+
+		session.waitChan <- nil
+
+		retErr = nazaerrors.CombineErrors(e1, e2, e3, e4)
+	})
+	return retErr
 }

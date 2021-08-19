@@ -1,4 +1,4 @@
-// Copyright 2020, Chef.  All rights reserved.
+// Copyright 2021, Chef.  All rights reserved.
 // https://github.com/cfeeling/lal
 //
 // Use of this source code is governed by a MIT-style license
@@ -6,6 +6,12 @@
 //
 // Author: Chef (191201771@qq.com)
 
-package rtprtcp
+package hls
 
-const MaxRTPRTCPPacketSize = 1500
+var (
+	PathStrategy IPathStrategy = &DefaultPathStrategy{}
+)
+
+var (
+	calcFragmentHeaderQueueSize = 16
+)

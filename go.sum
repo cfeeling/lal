@@ -1,7 +1,6 @@
-github.com/cfeeling/naza v0.18.6 h1:v2DNUVJztFMWifzdy7BNkdyh6pBcgm5gem483WR2DqU=
-github.com/cfeeling/naza v0.18.6/go.mod h1:yxlcsDMzm9nb7EhAHxpLXGNQSrO8VhbDlVxVRpQoMQ4=
-github.com/cfeeling/lal v0.21.0 h1:K9CzkZfH+NR46+o9S3MBoYnuZx+hxbNqkeiLZ2GDWK4=
-github.com/cfeeling/lal v0.21.0/go.mod h1:shGpNTGG7AcgcJAEsC6lKJ6xzR3Nd3MZCntVOrtxvsU=
-github.com/cfeeling/naza v0.18.3/go.mod h1:5LeGupZZFtYP1g/S203n9vXoUNVdlRnPIfM6rExjqt0=
-github.com/cfeeling/naza v0.18.5 h1:new/bBkivdVqPZpaviseZc2Z4qZ9I4KpKvJUmXCXjEk=
-github.com/cfeeling/naza v0.18.5/go.mod h1:5LeGupZZFtYP1g/S203n9vXoUNVdlRnPIfM6rExjqt0=
+github.com/q191201771/naza v0.18.6 h1:v2DNUVJztFMWifzdy7BNkdyh6pBcgm5gem483WR2DqU=
+github.com/q191201771/naza v0.18.6/go.mod h1:yxlcsDMzm9nb7EhAHxpLXGNQSrO8VhbDlVxVRpQoMQ4=
+github.com/cfeeling/lal v0.24.0 h1:woPoSPZmCg5YJlQaXFBYhip0Fm0LcVHAAywj+C1Dyws=
+github.com/cfeeling/lal v0.24.0/go.mod h1:FgYM8m3Ta7g/p/jw3V60kLZGmRScm4AR9YsZJyaTuf4=
+github.com/q191201771/naza v0.20.0 h1:VRessjnJDQgclflzUUMy8qIzLYtblaLv2po6wb4rMNM=
+github.com/q191201771/naza v0.20.0/go.mod h1:5LeGupZZFtYP1g/S203n9vXoUNVdlRnPIfM6rExjqt0=

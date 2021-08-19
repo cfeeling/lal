@@ -13,7 +13,7 @@ import (
 
 	"github.com/cfeeling/lal/pkg/rtprtcp"
 
-	"github.com/cfeeling/naza/pkg/assert"
+	"github.com/q191201771/naza/pkg/assert"
 )
 
 func TestCompareSeq(t *testing.T) {
@@ -64,5 +64,5 @@ func TestSubSeq(t *testing.T) {
 	assert.Equal(t, 2, rtprtcp.SubSeq(1, 65535))
 }
 
-func TestParseRTPHeader(t *testing.T) {
+func TestParseRtpHeader(t *testing.T) {
 }

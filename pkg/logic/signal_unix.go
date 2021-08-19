@@ -15,7 +15,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	log "github.com/cfeeling/naza/pkg/nazalog"
+	log "github.com/q191201771/naza/pkg/nazalog"
 )
 
 func runSignalHandler(cb func()) {

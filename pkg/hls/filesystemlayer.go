@@ -11,7 +11,7 @@ package hls
 import (
 	"sync"
 
-	"github.com/cfeeling/naza/pkg/filesystemlayer"
+	"github.com/q191201771/naza/pkg/filesystemlayer"
 )
 
 var (
@@ -21,16 +21,20 @@ var (
 
 func SetUseMemoryAsDiskFlag(flag bool) {
 	setOnce.Do(func() {
-		var t filesystemlayer.FSLType
+		var t filesystemlayer.FslType
 		if flag {
-			t = filesystemlayer.FSLTypeMemory
+			t = filesystemlayer.FslTypeMemory
 		} else {
-			t = filesystemlayer.FSLTypeDisk
+			t = filesystemlayer.FslTypeDisk
 		}
 		if fslCtx == nil || fslCtx.Type() != t {
-			fslCtx = filesystemlayer.FSLFactory(t)
+			fslCtx = filesystemlayer.FslFactory(t)
 		}
 	})
+}
+
+func ReadFile(filename string) ([]byte, error) {
+	return fslCtx.ReadFile(filename)
 }
 
 func RemoveAll(path string) error {
@@ -38,5 +42,5 @@ func RemoveAll(path string) error {
 }
 
 func init() {
-	fslCtx = filesystemlayer.FSLFactory(filesystemlayer.FSLTypeDisk)
+	fslCtx = filesystemlayer.FslFactory(filesystemlayer.FslTypeDisk)
 }

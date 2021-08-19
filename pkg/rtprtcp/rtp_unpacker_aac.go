@@ -10,28 +10,28 @@ package rtprtcp
 
 import (
 	"github.com/cfeeling/lal/pkg/base"
-	"github.com/cfeeling/naza/pkg/nazalog"
+	"github.com/q191201771/naza/pkg/nazalog"
 )
 
-type RTPUnpackerAAC struct {
-	payloadType base.AVPacketPT
+type RtpUnpackerAac struct {
+	payloadType base.AvPacketPt
 	clockRate   int
-	onAVPacket  OnAVPacket
+	onAvPacket  OnAvPacket
 }
 
-func NewRTPUnpackerAAC(payloadType base.AVPacketPT, clockRate int, onAVPacket OnAVPacket) *RTPUnpackerAAC {
-	return &RTPUnpackerAAC{
+func NewRtpUnpackerAac(payloadType base.AvPacketPt, clockRate int, onAvPacket OnAvPacket) *RtpUnpackerAac {
+	return &RtpUnpackerAac{
 		payloadType: payloadType,
 		clockRate:   clockRate,
-		onAVPacket:  onAVPacket,
+		onAvPacket:  onAvPacket,
 	}
 }
 
-func (unpacker *RTPUnpackerAAC) CalcPositionIfNeeded(pkt *RTPPacket) {
+func (unpacker *RtpUnpackerAac) CalcPositionIfNeeded(pkt *RtpPacket) {
 	// noop
 }
 
-func (unpacker *RTPUnpackerAAC) TryUnpackOne(list *RTPPacketList) (unpackedFlag bool, unpackedSeq uint16) {
+func (unpacker *RtpUnpackerAac) TryUnpackOne(list *RtpPacketList) (unpackedFlag bool, unpackedSeq uint16) {
 	// rfc3640 2.11.  Global Structure of Payload Format
 	//
 	// +---------+-----------+-----------+---------------+
@@ -62,58 +62,58 @@ func (unpacker *RTPUnpackerAAC) TryUnpackOne(list *RTPPacketList) (unpackedFlag 
 	//   Unit, and 0 on all other fragments.
 	//
 
-	p := list.head.next // first
+	p := list.Head.Next // first
 	if p == nil {
 		return false, 0
 	}
-	b := p.packet.Raw[p.packet.Header.payloadOffset:]
+	b := p.Packet.Raw[p.Packet.Header.payloadOffset:]
 	//nazalog.Debugf("%d, %d, %s", len(pkt.Raw), pkt.Header.timestamp, hex.Dump(b))
 
-	aus := parseAU(b)
+	aus := parseAu(b)
 
 	if len(aus) == 1 {
 		if aus[0].size <= uint32(len(b[aus[0].pos:])) {
 			// one complete access unit
-			var outPkt base.AVPacket
+			var outPkt base.AvPacket
 			outPkt.PayloadType = unpacker.payloadType
-			outPkt.Timestamp = p.packet.Header.Timestamp / uint32(unpacker.clockRate/1000)
+			outPkt.Timestamp = p.Packet.Header.Timestamp / uint32(unpacker.clockRate/1000)
 			outPkt.Payload = b[aus[0].pos : aus[0].pos+aus[0].size]
-			unpacker.onAVPacket(outPkt)
+			unpacker.onAvPacket(outPkt)
 
-			list.head.next = p.next
-			list.size--
-			return true, p.packet.Header.Seq
+			list.Head.Next = p.Next
+			list.Size--
+			return true, p.Packet.Header.Seq
 		}
 
 		// fragmented
 		// 注意，这里我们参考size和rtp包头中的timestamp，不参考rtp包头中的mark位
 
 		totalSize := aus[0].size
-		timestamp := p.packet.Header.Timestamp
+		timestamp := p.Packet.Header.Timestamp
 
 		var as [][]byte
 		as = append(as, b[aus[0].pos:])
 		cacheSize := uint32(len(b[aus[0].pos:]))
 
-		seq := p.packet.Header.Seq
-		p = p.next
+		seq := p.Packet.Header.Seq
+		p = p.Next
 		packetCount := 0
 		for {
 			packetCount++
 			if p == nil {
 				return false, 0
 			}
-			if SubSeq(p.packet.Header.Seq, seq) != 1 {
+			if SubSeq(p.Packet.Header.Seq, seq) != 1 {
 				return false, 0
 			}
-			if p.packet.Header.Timestamp != timestamp {
+			if p.Packet.Header.Timestamp != timestamp {
 				nazalog.Errorf("fragments of the same access shall have the same timestamp. first=%d, curr=%d",
-					timestamp, p.packet.Header.Timestamp)
+					timestamp, p.Packet.Header.Timestamp)
 				return false, 0
 			}
 
-			b = p.packet.Raw[p.packet.Header.payloadOffset:]
-			aus := parseAU(b)
+			b = p.Packet.Raw[p.Packet.Header.payloadOffset:]
+			aus := parseAu(b)
 			if len(aus) != 1 {
 				nazalog.Errorf("shall be a single fragment. len(aus)=%d", len(aus))
 				return false, 0
@@ -125,22 +125,22 @@ func (unpacker *RTPUnpackerAAC) TryUnpackOne(list *RTPPacketList) (unpackedFlag 
 			}
 
 			cacheSize += uint32(len(b[aus[0].pos:]))
-			seq = p.packet.Header.Seq
+			seq = p.Packet.Header.Seq
 			as = append(as, b[aus[0].pos:])
 			if cacheSize < totalSize {
-				p = p.next
+				p = p.Next
 			} else if cacheSize == totalSize {
-				var outPkt base.AVPacket
+				var outPkt base.AvPacket
 				outPkt.PayloadType = unpacker.payloadType
-				outPkt.Timestamp = p.packet.Header.Timestamp / uint32(unpacker.clockRate/1000)
+				outPkt.Timestamp = p.Packet.Header.Timestamp / uint32(unpacker.clockRate/1000)
 				for _, a := range as {
 					outPkt.Payload = append(outPkt.Payload, a...)
 				}
-				unpacker.onAVPacket(outPkt)
+				unpacker.onAvPacket(outPkt)
 
-				list.head.next = p.next
-				list.size -= packetCount
-				return true, p.packet.Header.Seq
+				list.Head.Next = p.Next
+				list.Size -= packetCount
+				return true, p.Packet.Header.Seq
 			} else {
 				nazalog.Errorf("cache size bigger then total size. cacheSize=%d, totalSize=%d",
 					cacheSize, totalSize)
@@ -152,18 +152,18 @@ func (unpacker *RTPUnpackerAAC) TryUnpackOne(list *RTPPacketList) (unpackedFlag 
 
 	// more complete access unit
 	for i := range aus {
-		var outPkt base.AVPacket
+		var outPkt base.AvPacket
 		outPkt.PayloadType = unpacker.payloadType
-		outPkt.Timestamp = p.packet.Header.Timestamp / uint32(unpacker.clockRate/1000)
+		outPkt.Timestamp = p.Packet.Header.Timestamp / uint32(unpacker.clockRate/1000)
 		// TODO chef: 这里1024的含义
 		outPkt.Timestamp += uint32(i * (1024 * 1000) / unpacker.clockRate)
 		outPkt.Payload = b[aus[i].pos : aus[i].pos+aus[i].size]
-		unpacker.onAVPacket(outPkt)
+		unpacker.onAvPacket(outPkt)
 	}
 
-	list.head.next = p.next
-	list.size--
-	return true, p.packet.Header.Seq
+	list.Head.Next = p.Next
+	list.Size--
+	return true, p.Packet.Header.Seq
 }
 
 type au struct {
@@ -171,7 +171,7 @@ type au struct {
 	pos  uint32
 }
 
-func parseAU(b []byte) (ret []au) {
+func parseAu(b []byte) (ret []au) {
 	// AU Header Section
 	var auHeadersLength uint32
 	auHeadersLength = uint32(b[0])<<8 + uint32(b[1])
@@ -179,16 +179,16 @@ func parseAU(b []byte) (ret []au) {
 
 	// TODO chef: 这里的2是写死的，正常是外部传入auSize和auIndex所占位数的和
 	const auHeaderSize = 2
-	nbAUHeaders := uint32(auHeadersLength) / auHeaderSize // 有多少个AU-Header
+	nbAuHeaders := uint32(auHeadersLength) / auHeaderSize // 有多少个AU-Header
 
 	pauh := uint32(2)                  // AU Header pos
 	pau := uint32(2) + auHeadersLength // AU pos
 
-	for i := uint32(0); i < nbAUHeaders; i++ {
+	for i := uint32(0); i < nbAuHeaders; i++ {
 		// TODO chef: auSize和auIndex所在的位数是写死的13bit，3bit，标准的做法应该从外部传入，比如从sdp中获取后传入
 		auSize := uint32(b[pauh])<<8 | uint32(b[pauh+1]&0xF8) // 13bit
 		auSize /= 8
-		// 注意，fragment时，auIndex并不可靠。见TestAACCase1
+		// 注意，fragment时，auIndex并不可靠。见TestAacCase1
 		//auIndex := b[pauh+1] & 0x7
 		//nazalog.Debugf("~ %d %d", auSize, auIndex)
 
@@ -201,9 +201,9 @@ func parseAU(b []byte) (ret []au) {
 		pau += auSize
 	}
 
-	if (nbAUHeaders > 1 && pau != uint32(len(b))) ||
-		(nbAUHeaders == 1 && pau < uint32(len(b))) {
-		nazalog.Warnf("rtp packet size invalid. nbAUHeaders=%d, pau=%d, len(b)=%d", nbAUHeaders, pau, len(b))
+	if (nbAuHeaders > 1 && pau != uint32(len(b))) ||
+		(nbAuHeaders == 1 && pau < uint32(len(b))) {
+		nazalog.Warnf("rtp packet size invalid. nbAuHeaders=%d, pau=%d, len(b)=%d, auHeadersLength=%d", nbAuHeaders, pau, len(b), auHeadersLength)
 	}
 
 	return

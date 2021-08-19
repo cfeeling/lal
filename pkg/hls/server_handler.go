@@ -17,7 +17,8 @@ import (
 )
 
 type ServerHandler struct {
-	outPath string
+	outPath          string
+	readFileFallback ReadFileFallback
 	//addr    string
 	//ln      net.Listener
 	//httpSrv *http.Server
@@ -27,6 +28,10 @@ func NewServerHandler(outPath string) *ServerHandler {
 	return &ServerHandler{
 		outPath: outPath,
 	}
+}
+
+func (s *ServerHandler) SetReadFileFallback(fallback ReadFileFallback) {
+	s.readFileFallback = fallback
 }
 
 //
@@ -65,6 +70,9 @@ func (s *ServerHandler) ServeHTTP(resp http.ResponseWriter, req *http.Request) {
 	}
 
 	content, err := ReadFile(ri.FileNameWithPath)
+	if err != nil && s.readFileFallback != nil {
+		content, err = s.readFileFallback(s.outPath, ri.FileName, ri.StreamName, ri.FileType)
+	}
 	if err != nil {
 		nazalog.Warnf("read hls file failed. request=%+v, err=%+v", ri, err)
 		resp.WriteHeader(404)

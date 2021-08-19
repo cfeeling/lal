@@ -73,7 +73,8 @@ type HttptsConfig struct {
 type HlsConfig struct {
 	CommonHttpServerConfig
 
-	UseMemoryAsDiskFlag bool `json:"use_memory_as_disk_flag"`
+	UseMemoryAsDiskFlag  bool                 `json:"use_memory_as_disk_flag"`
+	HttpReadFileFallback hls.ReadFileFallback `json:"-"`
 	hls.MuxerConfig
 }
 

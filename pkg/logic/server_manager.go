@@ -54,6 +54,10 @@ func NewServerManager() *ServerManager {
 		m.hlsServerHandler = hls.NewServerHandler(config.HlsConfig.OutPath)
 	}
 
+	if config.HlsConfig.Enable && config.HlsConfig.HttpReadFileFallback != nil {
+		m.hlsServerHandler.SetReadFileFallback(config.HlsConfig.HttpReadFileFallback)
+	}
+
 	if config.RtmpConfig.Enable {
 		m.rtmpServer = rtmp.NewServer(m, config.RtmpConfig.Addr)
 	}

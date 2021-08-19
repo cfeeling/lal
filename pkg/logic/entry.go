@@ -32,6 +32,10 @@ func GetConfig() *Config {
 	return config
 }
 
+func SetConfig(c *Config) {
+	config = c
+}
+
 func Init(confFile string) {
 	LoadConfAndInitLog(confFile)
 
@@ -59,7 +63,7 @@ func Init(confFile string) {
 }
 
 func RunLoop() {
-	sm = NewServerManager()
+	sm = NewStandaloneServerManager(config)
 
 	if config.PprofConfig.Enable {
 		go runWebPprof(config.PprofConfig.Addr)

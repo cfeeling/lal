@@ -151,5 +151,6 @@ func (*DefaultPathStrategy) GetTsFileName(streamName string, index int, timestam
 }
 
 func (*DefaultPathStrategy) getStreamNameFromTsFileName(fileName string) string {
-	return strings.Split(fileName, "-")[0]
+	strList := strings.Split(fileName, "-")
+	return strings.Join(strList[:len(strList)-2], "-")
 }

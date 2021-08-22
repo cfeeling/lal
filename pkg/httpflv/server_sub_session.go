@@ -9,10 +9,8 @@
 package httpflv
 
 import (
-	"net"
-	"time"
-
 	"github.com/cfeeling/lal/pkg/base"
+	"net"
 
 	"github.com/q191201771/naza/pkg/connection"
 
@@ -71,14 +69,14 @@ func (session *SubSession) Dispose() error {
 func init() {
 	flvHttpResponseHeaderStr := "HTTP/1.1 200 OK\r\n" +
 		"Server: " + base.LalHttpflvSubSessionServer + "\r\n" +
-		//"Cache-Control: no-cache\r\n" +
+		"Cache-Control: no-cache\r\n" +
 		"Content-Type: video/x-flv\r\n" +
 		"Connection: close\r\n" +
-		//"Expires: -1\r\n" +
+		"Expires: -1\r\n" +
 		"Pragma: no-cache\r\n" +
 		"Access-Control-Allow-Credentials: true\r\n" +
 		"Access-Control-Allow-Origin: *\r\n" +
-		"Date: " + time.Now().Format(time.RFC1123) + "\r\n" +
+		//"Date: " + time.Now().Format(time.RFC1123) + "\r\n" +
 		"\r\n"
 
 	flvHttpResponseHeader = []byte(flvHttpResponseHeaderStr)

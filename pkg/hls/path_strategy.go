@@ -118,7 +118,11 @@ func (dps *DefaultPathStrategy) GetRequestInfo(uri string, rootOutPath string) (
 			ri.StreamName = uriItems[len(uriItems)-2]
 			ri.FileNameWithPath = filepath.Join(rootOutPath, ri.StreamName, ri.FileName)
 		} else {
-			ri.StreamName = fileNameWithOutType
+			if len(uriItems) > 3 {
+				ri.StreamName = uriItems[len(uriItems)-2]
+			} else {
+				ri.StreamName = fileNameWithOutType
+			}
 			ri.FileNameWithPath = filepath.Join(rootOutPath, ri.StreamName, playlistM3u8FileName)
 		}
 	} else if ri.FileType == "ts" {

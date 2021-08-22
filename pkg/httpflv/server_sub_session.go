@@ -74,7 +74,7 @@ func init() {
 		//"Cache-Control: no-cache\r\n" +
 		"Content-Type: video/x-flv\r\n" +
 		"Connection: close\r\n" +
-		"Expires: -1\r\n" +
+		//"Expires: -1\r\n" +
 		"Pragma: no-cache\r\n" +
 		"Access-Control-Allow-Credentials: true\r\n" +
 		"Access-Control-Allow-Origin: *\r\n" +

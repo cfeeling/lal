@@ -511,3 +511,7 @@ func (m *Muxer) incrFrag() {
 		m.nfrags++
 	}
 }
+
+func (m *Muxer) GetStreamName() string {
+	return m.streamName
+}

@@ -81,18 +81,20 @@ func (a *AvPacketQueue) Feed(pkt base.AvPacket) {
 	}
 
 	// 如果音频和视频都存在，则按序输出，直到其中一个为空
-	for !a.audioQueue.Empty() && !a.videoQueue.Empty() {
-		apkt, _ := a.audioQueue.Front()
+	for /*!a.audioQueue.Empty() &&*/ !a.videoQueue.Empty() {
+		//apkt, _ := a.audioQueue.Front()
 		vpkt, _ := a.videoQueue.Front()
-		aapkt := apkt.(base.AvPacket)
+		//aapkt := apkt.(base.AvPacket)
 		vvpkt := vpkt.(base.AvPacket)
-		if aapkt.Timestamp < vvpkt.Timestamp {
-			_, _ = a.audioQueue.PopFront()
-			a.onAvPacket(aapkt)
-		} else {
-			_, _ = a.videoQueue.PopFront()
-			a.onAvPacket(vvpkt)
-		}
+		/*
+			if aapkt.Timestamp < vvpkt.Timestamp {
+				_, _ = a.audioQueue.PopFront()
+				a.onAvPacket(aapkt)
+			} else {
+		*/
+		_, _ = a.videoQueue.PopFront()
+		a.onAvPacket(vvpkt)
+		//}
 	}
 
 	// 如果视频满了，则全部输出
@@ -125,10 +127,10 @@ func (a *AvPacketQueue) PopAllByForce() {
 
 func (a *AvPacketQueue) popAllAudio() {
 	for !a.audioQueue.Empty() {
-		pkt, _ := a.audioQueue.Front()
-		ppkt := pkt.(base.AvPacket)
+		//pkt, _ := a.audioQueue.Front()
+		//ppkt := pkt.(base.AvPacket)
 		_, _ = a.audioQueue.PopFront()
-		a.onAvPacket(ppkt)
+		//a.onAvPacket(ppkt)
 	}
 }
 

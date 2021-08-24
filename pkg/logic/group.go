@@ -1196,8 +1196,14 @@ func (group *Group) broadcastByRtmpMsg(msg base.RtmpMsg) {
 // rtsp.PubSession, rtmp2RtspRemuxer
 //
 func (group *Group) onRtpPacket(pkt rtprtcp.RtpPacket) {
+	if group.sdpCtx == nil {
+		for s := range group.rtspSubSessionSet {
+			s.WriteRtpPacket(pkt)
+		}
+		return
+	}
 	// 音频直接发送
-	if group.sdpCtx != nil && group.sdpCtx.IsAudioPayloadTypeOrigin(int(pkt.Header.PacketType)) {
+	if group.sdpCtx.IsAudioPayloadTypeOrigin(int(pkt.Header.PacketType)) {
 		for s := range group.rtspSubSessionSet {
 			s.WriteRtpPacket(pkt)
 		}
@@ -1216,20 +1222,16 @@ func (group *Group) onRtpPacket(pkt rtprtcp.RtpPacket) {
 		}
 
 		if !boundaryChecked {
-			if group.sdpCtx != nil {
-				switch group.sdpCtx.GetVideoPayloadTypeBase() {
-				case base.AvPacketPtAvc:
-					boundary = rtprtcp.IsAvcBoundary(pkt)
-				case base.AvPacketPtHevc:
-					boundary = rtprtcp.IsHevcBoundary(pkt)
-				default:
-					// 注意，不是avc和hevc时，直接发送
-					boundary = true
-				}
-				boundaryChecked = true
-			} else {
+			switch group.sdpCtx.GetVideoPayloadTypeBase() {
+			case base.AvPacketPtAvc:
+				boundary = rtprtcp.IsAvcBoundary(pkt)
+			case base.AvPacketPtHevc:
+				boundary = rtprtcp.IsHevcBoundary(pkt)
+			default:
+				// 注意，不是avc和hevc时，直接发送
 				boundary = true
 			}
+			boundaryChecked = true
 		}
 
 		if boundary {

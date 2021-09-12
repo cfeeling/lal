@@ -25,10 +25,16 @@ func (f *Fragment) OpenFile(filename string) (err error) {
 }
 
 func (f *Fragment) WriteFile(b []byte) (err error) {
+	if f.fp == nil {
+		return
+	}
 	_, err = f.fp.Write(b)
 	return
 }
 
 func (f *Fragment) CloseFile() error {
+	if f.fp == nil {
+		return nil
+	}
 	return f.fp.Close()
 }

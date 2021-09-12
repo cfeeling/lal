@@ -11,6 +11,7 @@ package hls
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/cfeeling/lal/pkg/mpegts"
@@ -101,6 +102,8 @@ type Muxer struct {
 
 	streamer *Streamer
 	patpmt   []byte
+
+	enabledStreams sync.Map
 }
 
 // 记录fragment的一些信息，注意，写m3u8文件时可能还需要用到历史fragment的信息
@@ -141,6 +144,14 @@ func NewMuxer(streamName string, enable bool, config *MuxerConfig, observer Muxe
 	m.streamer = streamer
 	nazalog.Infof("[%s] lifecycle new hls muxer. muxer=%p, streamName=%s", uk, m, streamName)
 	return m
+}
+
+func (m *Muxer) EnableStream(name string) {
+	m.enabledStreams.Store(name, true)
+}
+
+func (m *Muxer) DisableStream(name string) {
+	m.enabledStreams.Store(name, false)
 }
 
 func (m *Muxer) Start() {
@@ -210,7 +221,8 @@ func (m *Muxer) OnFrame(streamer *Streamer, frame *mpegts.Frame) {
 	}
 
 	mpegts.PackTsPacket(frame, func(packet []byte) {
-		if m.enable {
+		existedKey, ok := m.enabledStreams.Load(m.streamName)
+		if m.enable && ok && existedKey.(bool) {
 			if err := m.fragment.WriteFile(packet); err != nil {
 				nazalog.Errorf("[%s] fragment write error. err=%+v", m.UniqueKey, err)
 				return
@@ -310,7 +322,8 @@ func (m *Muxer) openFragment(ts uint64, discont bool) error {
 	rightNow := time.Now()
 	filename := PathStrategy.GetTsFileName(m.streamName, id, int(rightNow.UnixNano()/1e6))
 	filenameWithPath := PathStrategy.GetTsFileNameWithPath(m.outPath, filename)
-	if m.enable {
+	existedKey, ok := m.enabledStreams.Load(m.streamName)
+	if m.enable && ok && existedKey.(bool) {
 		if err := m.fragment.OpenFile(filenameWithPath); err != nil {
 			return err
 		}
@@ -344,7 +357,8 @@ func (m *Muxer) closeFragment(isLast bool) error {
 		return nil
 	}
 
-	if m.enable {
+	existedKey, ok := m.enabledStreams.Load(m.streamName)
+	if m.enable && ok && existedKey.(bool) {
 		if err := m.fragment.CloseFile(); err != nil {
 			return err
 		}
@@ -387,7 +401,8 @@ func (m *Muxer) closeFragment(isLast bool) error {
 }
 
 func (m *Muxer) WriteRecordPlaylistWithFile(fileName, backupFileName string, isLast bool) {
-	if !m.enable {
+	existedKey, ok := m.enabledStreams.Load(m.streamName)
+	if !m.enable || !ok || !existedKey.(bool) {
 		return
 	}
 	// 找出整个直播流从开始到结束最大的分片时长
@@ -444,7 +459,8 @@ func (m *Muxer) writeRecordPlaylist(isLast bool) {
 }
 
 func (m *Muxer) writePlaylist(isLast bool) {
-	if !m.enable {
+	existedKey, ok := m.enabledStreams.Load(m.streamName)
+	if !m.enable || !ok || !existedKey.(bool) {
 		return
 	}
 

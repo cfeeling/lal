@@ -386,11 +386,10 @@ func (m *Muxer) closeFragment(isLast bool) error {
 	return nil
 }
 
-func (m *Muxer) writeRecordPlaylist(isLast bool) {
+func (m *Muxer) WriteRecordPlaylistWithFile(fileName, backupFileName string, isLast bool) {
 	if !m.enable {
 		return
 	}
-
 	// 找出整个直播流从开始到结束最大的分片时长
 	// 注意，由于前面已经incr过了，所以这里-1获取
 	//frag := m.getCurrFrag()
@@ -401,10 +400,9 @@ func (m *Muxer) writeRecordPlaylist(isLast bool) {
 
 	fragLines := fmt.Sprintf("#EXTINF:%.3f,\n%s\n", currFrag.duration, currFrag.filename)
 
-	content, err := fslCtx.ReadFile(m.recordPlayListFilename)
+	content, err := fslCtx.ReadFile(fileName)
 	if err == nil {
 		// m3u8文件已经存在
-
 		content = bytes.TrimSuffix(content, []byte("#EXT-X-ENDLIST\n"))
 		content, err = updateTargetDurationInM3u8(content, int(m.recordMaxFragDuration))
 		if err != nil {
@@ -436,9 +434,13 @@ func (m *Muxer) writeRecordPlaylist(isLast bool) {
 		content = buf.Bytes()
 	}
 
-	if err := writeM3u8File(content, m.recordPlayListFilename, m.recordPlayListFilenameBak); err != nil {
+	if err := writeM3u8File(content, fileName, backupFileName); err != nil {
 		nazalog.Errorf("[%s] write record m3u8 file error. err=%+v", m.UniqueKey, err)
 	}
+}
+
+func (m *Muxer) writeRecordPlaylist(isLast bool) {
+	m.WriteRecordPlaylistWithFile(m.recordPlayListFilename, m.recordPlayListFilenameBak, isLast)
 }
 
 func (m *Muxer) writePlaylist(isLast bool) {

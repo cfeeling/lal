@@ -104,6 +104,9 @@ type Muxer struct {
 	patpmt   []byte
 
 	enabledStreams sync.Map
+	// 用于记录在开启存储和关闭存储时的片段id，以便后续处理
+	// Key 为 enabled|disabled_车辆ID，值为片段id
+	fragIdRecord sync.Map
 }
 
 // 记录fragment的一些信息，注意，写m3u8文件时可能还需要用到历史fragment的信息
@@ -147,10 +150,12 @@ func NewMuxer(streamName string, enable bool, config *MuxerConfig, observer Muxe
 }
 
 func (m *Muxer) EnableStream(name string) {
+	m.fragIdRecord.Store(fmt.Sprintf("enabled_%s", name), m.getCurrFrag().id)
 	m.enabledStreams.Store(name, true)
 }
 
 func (m *Muxer) DisableStream(name string) {
+	m.fragIdRecord.Store(fmt.Sprintf("disabled_%s", name), m.getCurrFrag().id)
 	m.enabledStreams.Store(name, false)
 }
 
@@ -222,7 +227,8 @@ func (m *Muxer) OnFrame(streamer *Streamer, frame *mpegts.Frame) {
 
 	mpegts.PackTsPacket(frame, func(packet []byte) {
 		existedKey, ok := m.enabledStreams.Load(m.streamName)
-		if m.enable && ok && existedKey.(bool) {
+		enabledFragId, fragOk := m.fragIdRecord.Load(fmt.Sprintf("enabled_%s", m.streamName))
+		if (m.enable && ok && existedKey.(bool)) || (fragOk && enabledFragId == m.getCurrFrag().id) {
 			if err := m.fragment.WriteFile(packet); err != nil {
 				nazalog.Errorf("[%s] fragment write error. err=%+v", m.UniqueKey, err)
 				return
@@ -358,7 +364,8 @@ func (m *Muxer) closeFragment(isLast bool) error {
 	}
 
 	existedKey, ok := m.enabledStreams.Load(m.streamName)
-	if m.enable && ok && existedKey.(bool) {
+	enabledFragId, fragOk := m.fragIdRecord.Load(fmt.Sprintf("disabled_%s", m.streamName))
+	if (m.enable && ok && existedKey.(bool)) || (fragOk && enabledFragId == m.getCurrFrag().id) {
 		if err := m.fragment.CloseFile(); err != nil {
 			return err
 		}
@@ -402,7 +409,8 @@ func (m *Muxer) closeFragment(isLast bool) error {
 
 func (m *Muxer) WriteRecordPlaylistWithFile(fileName, backupFileName string, isLast bool) {
 	existedKey, ok := m.enabledStreams.Load(m.streamName)
-	if !m.enable || !ok || !existedKey.(bool) {
+	enabledFragId, fragOk := m.fragIdRecord.Load(fmt.Sprintf("disabled_%s", m.streamName))
+	if (!m.enable || !ok || !existedKey.(bool)) && (!fragOk || enabledFragId != m.getCurrFrag().id) {
 		return
 	}
 	// 找出整个直播流从开始到结束最大的分片时长
@@ -460,7 +468,8 @@ func (m *Muxer) writeRecordPlaylist(isLast bool) {
 
 func (m *Muxer) writePlaylist(isLast bool) {
 	existedKey, ok := m.enabledStreams.Load(m.streamName)
-	if !m.enable || !ok || !existedKey.(bool) {
+	enabledFragId, fragOk := m.fragIdRecord.Load(fmt.Sprintf("disabled_%s", m.streamName))
+	if (!m.enable || !ok || !existedKey.(bool)) && (!fragOk || enabledFragId != m.getCurrFrag().id) {
 		return
 	}
 

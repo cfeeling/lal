@@ -271,7 +271,8 @@ func (m *Muxer) updateFragment(ts uint64, boundary bool) error {
 			nazalog.Warnf("[%s] force fragment split. fragTs=%d, ts=%d", m.UniqueKey, m.fragTs, ts)
 
 			if err := m.closeFragment(false); err != nil {
-				return err
+				//return err
+				nazalog.Errorf("[%s] close fragment false. %s", m.UniqueKey, err.Error())
 			}
 			if err := m.openFragment(ts, true); err != nil {
 				return err
@@ -367,7 +368,8 @@ func (m *Muxer) closeFragment(isLast bool) error {
 	enabledFragId, fragOk := m.fragIdRecord.Load(fmt.Sprintf("disabled_%s", m.streamName))
 	if (m.enable && ok && existedKey.(bool)) || (fragOk && enabledFragId == m.getCurrFrag().id) {
 		if err := m.fragment.CloseFile(); err != nil {
-			return err
+			//return err
+			nazalog.Errorf("[%s] close frag file : %s", m.UniqueKey, err.Error())
 		}
 	}
 

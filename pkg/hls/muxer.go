@@ -364,13 +364,14 @@ func (m *Muxer) closeFragment(isLast bool) error {
 		return nil
 	}
 
+	if err := m.fragment.CloseFile(); err != nil {
+		//return err
+		nazalog.Errorf("[%s] close frag file : %s", m.UniqueKey, err.Error())
+	}
+
 	existedKey, ok := m.enabledStreams.Load(m.streamName)
-	enabledFragId, fragOk := m.fragIdRecord.Load(fmt.Sprintf("disabled_%s", m.streamName))
-	if (m.enable && ok && existedKey.(bool)) || (fragOk && enabledFragId == m.getCurrFrag().id) {
-		if err := m.fragment.CloseFile(); err != nil {
-			//return err
-			nazalog.Errorf("[%s] close frag file : %s", m.UniqueKey, err.Error())
-		}
+	if !m.enable || !ok || !existedKey.(bool) {
+		isLast = true
 	}
 
 	m.opened = false
@@ -378,6 +379,8 @@ func (m *Muxer) closeFragment(isLast bool) error {
 	// 更新序号，为下个分片做准备
 	// 注意，后面getFrag和getCurrFrag的调用，都依赖该处
 	m.incrFrag()
+
+	nazalog.Debugf("[%s] close frag file : pass, current frag: %d, nfrags: %d", m.UniqueKey, m.frag, m.nfrags)
 
 	m.writePlaylist(isLast)
 

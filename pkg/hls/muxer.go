@@ -366,7 +366,7 @@ func (m *Muxer) closeFragment(isLast bool) error {
 
 	if err := m.fragment.CloseFile(); err != nil {
 		nazalog.Errorf("[%s] close frag file : %s", m.UniqueKey, err.Error())
-		return err
+		//return err
 	}
 
 	existedKey, ok := m.enabledStreams.Load(m.streamName)
